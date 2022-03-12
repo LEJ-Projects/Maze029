@@ -1,0 +1,379 @@
+
+;       MAZE029.ASM
+;       14 Dec 2020     L. Johnson      Initial Version
+;       27 Feb 2022     L. Johnson      Added additional mazes & features
+;       03 Mar 2022     L. Johnson      Update to use room parameters for start & finish
+;
+;
+;
+bdos    equ     5       ;jump vector to bdos
+wboot   equ     0       ;vector to warm boot
+wconf   equ     2       ;bdos write a character to console
+wrtline equ     9       ;bdos write a line to the console
+rdline  equ     10      ;bdos read a line from console
+cr      equ     13      ;ascii carriage return
+lf      equ     10      ;ascii line feed
+ibuflen equ     100     ;length of input buffer
+;
+;       Start Transient Program Area
+;
+        org     0100h   ;CP/M expects us to start at 0100h
+
+;       Setup User Stack
+        lxi     sp,stak ;Load address of stack to stack pointer reg
+;
+;       DISPLAY SPLASH MESSAGE
+        LXI     D,MSPLASH        ;DE=ADDRESS OF MAZE SPLASH MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+        CALL BDOS
+;
+;       QUERY PLAYER FOR MAZE NUMBER
+QPLYRM: LXI     D,MMAZPR       ;DE=ADDRESS OF PROMPT MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+        CALL BDOS
+;
+;       GET  RESPONSE
+        LXI     D,INBUF ;DE=POINTER TO INPUT BUFFER
+        MVI     A,IBUFLEN       ;SET MAXSIZE TO READ
+        STAX    D       ;STORE ACCUMLATOR TO THE INPUT BUFFER
+        MVI     C,RDLINE        ;C=BDOS READ LINE COMMAND
+        CALL BDOS
+        lda     inbuf+2 ;1st character of response
+        sta     usmaz   ;Store as selected maze (will validate it better later)
+
+;       validate the response
+        sui     48      ;Convert from ASCII to binary
+        jm      useler
+;       jmp     gdrsp
+hichk:  lda     usmaz   ;Get User Selected Mase in ASCII
+        sui     58      ;verify remainder is less than 10
+        jm      gdrsp
+;
+;
+;       User Select Error
+useler: LXI     D,mmazer       ;DE=ADDRESS OF Error MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+        CALL BDOS
+        jmp     qplyrm  ;Ask User again.
+
+;       Good response - convert from ASCII & store
+gdrsp:  lda     usmaz   ;Get ASCII value
+        sui     48      ;Convert to binary
+        sta     usmaz   ;Store it
+        call    upmazs  ;Update the maze sub
+;
+;
+;       INITIALIZE CURRENT OFFSET TO MAZE START
+        LDA     MAZESRT       ;LOAD ACCUMULATOR WITH MAZE START
+        STA     CUROFF  ;STORE MAZE START OFFSET TO CURRENT OFFSET
+;
+;       SET CURRENT ROOM FROM MAZESRT (STILL IN REG A)
+        LXI     H,MAZE  ;LOAD ADDRESS OF MAZE TO HL REGISTER
+        MVI     B,0H    ;CLEAR B REGISTER
+        MOV     C,A     ;MOVE CURRENT OFFSET (IN A) TO C
+        DAD     B       ;ADD CURRENT ROOM OFFSET TO HL
+        MOV     A,M     ;MOVE OFFSET MAZE PARAMETER TO THE ACCUMULATOR
+        STA     CURROOM ;STORE ACCUMULATOR AS THE CURRENT ROOM
+;
+;
+;       CHECK IF NEW ROOM OR PREVIOUS ROOM
+NRCHK:  CALL    TRINC   ; INCREMENT THE 3 BYTE BCD TURN COUNT
+        CALL    DTCNT   ; DISPLAY TURN COUNT
+        LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+        ANI     40H     ;AND ACCUMULATOR WITH PRIOR ROOM VISIT MASK
+        JZ      NEWRM   ;ITS ZERO SO IT MUST BE A NEW ROOM
+;       PRIOR VISIT
+        CALL    DNRCNT  ;DISPLAY NEW ROOM COUNT
+        LXI     D,MPRRM ;DE = ADDRESS OF PRIOR ROOM MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+        CALL BDOS
+        JMP     CRTOR   ;CREATE ORIENTATION BYTE
+;
+;       NEW ROOM
+NEWRM:  CALL    NRINC   ;INCREMENT NEW ROOM COUNT
+        CALL    DNRCNT  ;DISPLAY NEW ROOM COUNT
+        LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+        ORI     40H     ;SET PRIOR ROOM FLAG
+        MOV     M,A     ;STORE UPDATED CURRENT ROOM
+        LXI     D,MNEWRM        ;DE = ADDRESS OF NEW ROOM MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+        CALL BDOS
+;
+;       EXIT CHECK
+EXCHK:  LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+        ani     80h     ;AND with Exit Mask
+        jz      crtor   ;Not the exit - create orientation byte
+;       MAZE EXIT FOUND
+        LXI     D,MMAZEX        ;DE=ADDRESS OF MAZE EXIT MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+        CALL BDOS
+        call    prentr  ;Press enter to continue
+        mvi     c, wrtline
+        lxi     d, mghist       ;Dots indicate where you were
+        call    bdos
+        call    pmaze
+        call    prentr
+        RET     ;RETURN TO CP/M - GAME IS FINISHED
+;
+;
+;       CREATE ORIENTATION BYTE
+;
+CRTOR:  NOP
+        LDA     NORINT  ;NEW ORIENTATION
+        STA     OORINT  ;SAVE IT AS OLD ORIENTATION
+;       ASSUME WE ARE FACING NORTH
+        MVI     B,0H    ;ZERO OUT B REG
+        LDA     CURROOM ;LOAD CURRENT ROOM
+        ANI     08H     ;CHECK BIT 3 OF ROOM (N DOOR)
+        JZ      CHK2    ;NO N DOOR, CHECK FOR S DOOR
+        MOV     A,B     ;MOVE B REG TO ACCUMULATOR
+        ADI     44H     ;SET BOTH NIBS TO FORWARD DOOR
+        MOV     B,A     ;MOVE ACCUMLATOR TO B REG
+CHK2:   LDA     CURROOM ;LOAD CURRENT ROOM
+        ANI     04H     ;CHECK BIT 2 OF ROOM (S DOOR)
+        JZ      CHK1    ;NO S DOOR, CHECK FOR E DOOR
+        MOV     A,B     ;MOVE B REG TO ACCUMULATOR
+        ADI     11H     ;SET BOTH NIBS TO BACK DOOR
+        MOV     B,A     ;MOVE ACCUMLATOR TO B REG
+CHK1:   LDA     CURROOM ;LOAD CURRENT ROOM
+        ANI     02H     ;CHECK BIT 1 OF ROOM (E DOOR)
+        JZ      CHK0    ;NO E DOOR, CHECK FOR W DOOR
+        MOV     A,B     ;MOVE B REG TO ACCUMULATOR
+        ADI     22H     ;SET BOTH NIBS TO RIGHT DOOR
+        MOV     B,A     ;MOVE ACCUMLATOR TO B REG
+CHK0:   LDA     CURROOM ;LOAD CURRENT ROOM
+        ANI     01H     ;CHECK BIT 0 OF ROOM (W DOOR)
+        JZ      TSTOR   ;JUMP TO TEST ACTUAL ORIENTATION
+        MOV     A,B     ;MOVE B REG TO ACCUMULATOR
+        ADI     88H     ;SET BOTH NIBS TO LEFT DOOR
+        MOV     B,A     ;MOVE ACCUMLATOR TO B REG
+;       FALL INTO TSTOR
+;
+;       TEST ROOM ORIENTATION
+;               B REG STILL HOLDS ORIENTATION BYTE
+;
+TSTOR:  LDA DIRFAC      ;LAST USER ENTRY OR LETTER S (1ST TURN)
+        CPI     'N'     ;CHECK IF NORTH
+        JNZ     CHKW    ;NOT NORTH - CHECK WEST
+;       ITS NORTH
+        MOV     A,B     ;MOVE B (NORINT) TO A
+        ANI     0FH     ;CLEAR UPPER NIBBLE
+        ADI     80H     ;SET UPPER NIBBLE TO N
+        MOV     B,A     ;MOVE ACCUM TO B REG
+        JMP     SAVORT  ;JUMP TO SAVE ORIENTATION
+CHKW:   MOV     A,B     ;MOVE B (NORINT) TO A
+        RRC             ;SHIFT NORINT RIGHT 1 BIT
+        MOV     B,A     ;SAVE NORINT IN B REG
+        LDA     DIRFAC  ;LAST USER ENTRY OR LETTER S (1ST TURN)
+        CPI     'W'     ;CHECK IF WEST
+        JNZ     CHKS    ;NOT WEST CHECK SOUTH
+;       ITS WEST
+        MOV     A,B     ;MOVE B (NORINT) TO A
+        ANI     0FH     ;CLEAR UPPER NIBBLE
+        ADI     10H     ;SET UPPER NIBBLE TO W
+        MOV     B,A     ;MOVE ACCUM TO B REG
+        JMP     SAVORT  ;JUMP TO SAVE ORIENTATION
+CHKS:   MOV     A,B     ;MOVE B (NORINT) TO A
+        RRC             ;SHIFT NORINT RIGHT 1 BIT
+        MOV     B,A     ;SAVE NORINT IN B REG
+        LDA     DIRFAC  ;LAST USER ENTRY OR LETTER S (1ST TURN)
+        CPI     'S'     ;CHECK IF SOUTH
+        JNZ     SETE    ;NOT SOUTH MUST BE EAST
+;       ITS SOUTH
+        MOV     A,B     ;MOVE B (NORINT) TO A
+        ANI     0FH     ;CLEAR UPPER NIBBLE
+        ADI     40H     ;SET UPPER NIBBLE TO S
+        MOV     B,A     ;MOVE ACCUM TO B REG
+        JMP     SAVORT  ;JUMP TO SAVE ORIENTATION
+;       ITS EAST
+;
+SETE:   MOV     A,B     ;MOVE B (NORINT) TO A
+        RRC             ;SHIFT NORINT RIGHT 1 BIT
+        ANI     0FH     ;CLEAR UPPER NIBBLE
+        ADI     20H     ;SET UPPER NIBBLE TO EAST
+        MOV     B,A     ;MOVE ACCUM TO B REG
+;       FALL INTO SAVE ORIENTATION
+;
+;       SAVE ORIENTATION
+SAVORT: MOV     A,B     ;MOVE B (NORINT) TO A
+        STA     NORINT  ;SAVE IN NORINT
+;       FALL INTO DISPLAY ORIENTATION
+DISORT: NOP             ;DISPLAY ORIENTATION
+        CALL    DIS3D   ;CALL 3D DISPLAY SUBROUTINE
+;
+DISROOM: NOP     ;DISPLAY ROOM AND QUERY PLAYER FOR DIRECTION
+;
+;       TEST CURRENT ROOM TO SEE IF IT HAS ONLY ONE EXIT
+        LDA     CURROOM ; LOAD ACCUMMULATOR WITH THE CURRENT ROOM
+        ANI     20H     ;AND THE ACCUMULATOR WITH THE SINGLE
+                        ;EXIT MASK WORD
+        JZ      MEXITS  ;GO TO MANY EXITS SINCE Z FLAG WAS 0
+;
+;       DISPLAY TEXT FOR ROOM WITH ONLY ONE EXIT
+        LXI     D,MSEXIT        ;DE = ADDRESS OF SINGLE EXIT MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WITE LINE COMMAND
+        CALL    BDOS
+        JMP     DEXITS  ;DISPLAY AVAILABLE EXITS
+;
+;       DISPLAY TEXT FOR ROOM WITH MULTIPLE EXITS
+MEXITS: LXI     D,MMEXIT        ;DE = ADDRESS OF MULTI EXIT MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+        CALL BDOS
+;       FALL INTO DEXITS
+;
+;       DISPLAY EXITS
+;
+DEXITS: LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+        ANI     08H     ;AND ACCUMULATOR WITH NORTH MASK
+        JZ      SCHK    ;JUMP TO SOUTH CHECK IF NO NORTH EXIT
+        LXI     D,NMESS ;PREPARE NORTH MESSAGE TO PRINT
+        MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+        CALL    BDOS
+SCHK:   LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+        ANI     04H     ;AND ACCUMULATOR WITH SOUTH MASK
+        JZ      ECHK    ;JUMP TO EAST CHECK IF NO SOUTH EXIT
+        LXI     D,SMESS ;PREPARE SOUTH MESSAGE TO PRINT
+        MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMNAD
+        CALL    BDOS
+ECHK:   LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+        ANI     02H     ;AND ACCUMULATOR WITH EAST MASK
+        JZ      WCHK    ;JUMP TO WEST CHECK IF NO EAST EXIT
+        LXI     D,EMESS ;PREPARE EAST MESSAGE TO PRINT
+        MVI     C,WRTLINE       ;C=-B\\BDOS WRITE COMMAND
+        CALL    BDOS
+WCHK:   LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+        ANI     01H     ;AND ACCUMULATOR WITH THE WEST MASK
+        JZ      QPLYR   ; JUMP TO QUERY THE PLAYER FOR DIRECTION
+        LXI     D,WMESS ;PREPARE WEST MESSAGE TO PRINT
+        MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+        CALL    BDOS
+;
+;       QUERY PLAYER FOR DIRECTION
+;
+QPLYR:  LXI     D,MPROMPT       ;DE=ADDRESS OF PROMPT MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+        CALL BDOS
+;
+;       GET PLAYER'S RESPONSE
+;
+        LXI     D,INBUF ;DE=POINTER TO INPUT BUFFER
+        MVI     A,IBUFLEN       ;SET MAXSIZE TO READ
+        STAX    D       ;STORE ACCUMLATOR TO THE INPUT BUFFER
+        MVI     C,RDLINE        ;C=BDOS READ LINE COMMAND
+        CALL BDOS
+;
+;       VALIDATE RESPONSE
+;
+VALRSP:  LDA     INBUF+2 ;GET 1ST CHARACTER OF THE RESPONSE
+        ANI     0DFH    ;CONVERT TO UPPER CASE
+        STA     INBUF+2 ;STORE FOR TESTING
+        STA     DIRFAC  ;STORE FOR ORIENTATION TEST
+;
+;       CHECK FOR EXIT
+;
+        CPI     'X'     ;COMPARE ACCUMULATOR WITH LETTER, X
+        JNZ     PKEYP   ;NOT X, Check if letter P entered
+        RET             ;RETURN TO CP/M
+;
+;       Check for Print Maze
+;
+pkeyp:  NOP     ;P key pressed check
+        CPI     'P'     ;COMPARE ACCUMULATOR WITH LETTER, P
+        JNZ     NQUER   ;NOT P, JUMP TO NORTH QUERY CHECK
+        call    pmaze
+        JMP     DISROOM ;DISPLAY exits AND REPEAT DIRECTION QUERY
+;
+;       CHECK FOR NORTH
+;
+NQUER:   CPI     'N'     ;COMPARE ACCUMULATOR WITH LETTER, N
+        JNZ     SQUER   ;NOT NORTH, JUMP TO SOUTH QUERY CHECK
+;
+;       ITS NORTH - CHECK IF NORTH IS A VALID DIRECTION
+        LDA     CURROOM ;PUT CURRENT ROOM INTO ACCUMULATOR
+        ANI     08H     ;AND WITH NORTH MASK
+        JZ      DIRBAD  ;THE DIRECTION IS BAD - PRINT MESSAGE
+;
+;       WE ARE GOING NORTH
+        LDA     CUROFF  ;LOAD ACCUMULATOR WITH CURRENT ROOM OFFSET
+        SUI     0AH     ;SUBTRACT 10 FROM ROOM OFFSET
+        STA     CUROFF  ;STORE UPDATED ROOM OFFSET
+        JMP     UPDTRM  ;UPDATE TO NEW ROOM
+;
+;       CHECK FOR SOUTH
+;
+SQUER:   LDA     INBUF+2 ;GET 1ST CHARACTER OF THE RESPONSE
+        CPI     'S'     ;COMPARE THE ACCUMULATOR WITH THE LETTER, S
+        JNZ     EQUER   ;NOT SOUTH- JUMP TO EAST QUERY CHECK
+;
+;       ITS SOUTH - CHECK IF SOUTH IS A VALID DIRECTION
+        LDA     CURROOM ;PUT CURRENT ROOM INTO ACCUMULATOR
+        ANI     04H     ;AND WITH SOUTH MASK
+        JZ      DIRBAD  ;THE DIRECTION IS BAD, PRINT MESSAGE
+;
+;       WE ARE GOING SOUTH
+        LDA     CUROFF  ;LOAD ACCUMULATOR WITH CURRENT OFFSET
+        ADI     0AH     ;ADD 10 TO THE ROOM OFFSET
+        STA     CUROFF  ;STORE UPDATED ROOM OFFSET
+        JMP     UPDTRM  ;JUMP TO UPDATE ROOM
+;
+;       CHECK FOR EAST
+;
+EQUER:   LDA     INBUF+2 ;GET 1ST CHARACTER OF THE RESPONSE
+        CPI     'E'     ;COMPARE THE ACCUMULATOR WITH THE LETTER, E
+        JNZ     WQUER   ;NOT EAST, JUMP TO WEST QUERY CHECK
+;
+;       ITS EAST - CHECK IF EAST IS A VALID DIRECTION
+        LDA     CURROOM ;PUT CURRENT ROOM INTO THE ACCUMULATOR
+        ANI     02H     ;AND WITH EAST MASK
+        JZ      DIRBAD  ;THE DIRECTION IS BAD, PRINT MESSAGE
+;
+;       WE ARE GOING EAST
+        LDA     CUROFF  ;LOAD ACCUMULATOR WITH THE CURRENT ROOM OFFSET
+        ADI     01H     ;ADD 1 TO THE ROOM OFFSET
+        STA     CUROFF  ;STORE THE UPDATED ROOM OFFSET
+        JMP     UPDTRM  ;JUMP TO UPDATE ROOM
+;
+;       WEST CHECK
+;
+WQUER:  LDA     INBUF+2 ;GET 1ST CHARACTER OF THE RESPONSE
+        CPI     'W'     ;COMPARE ACCUMULATOR WITH THE LETTER, W
+        JNZ     RSPBAD  ;NOT N,S,E OR W - PRINT BAD RESPONSE MESSAGE
+;
+;       ITS WEST - CHECK IF WEST IS A VALID DIRECTION
+        LDA     CURROOM ;PUT CURRENT ROOM INTO ACCUMULATOR
+        ANI     01H     ;AND WITH WEST MASK
+        JZ      DIRBAD  ;THE DIRECTION IS BAD, PRINT MESSAGE
+;
+;       WE ARE GOING WEST
+        LDA     CUROFF  ;LOAD ACCUMULATOR WITH CURRENT OFFSET
+        SUI     01H     ;SUBTRACT 1 FROM THE ROOM OFFSET
+        STA     CUROFF  ;STORE UPDATED ROOM OFFSET
+        JMP     UPDTRM  ;JUMP TO UPDATE ROOM
+;
+;       UPDATE CURRENT ROOM
+UPDTRM: LXI     H,MAZE  ;LOAD ADDRESS OF MAZE TO HL REGISTER
+        MVI     B,0H    ;CLEAR B REGISTER
+        LDA     CUROFF  ;MOVE CURRENT OFFSET TO ACCUMULATOR
+        MOV     C,A     ;MOVE CURRENT OFFSET TO C
+        DAD     B       ;ADD CURRENT ROOM OFFSET TO HL
+        MOV     A,M     ;MOVE OFFSET MAZE PARAMETER TO THE ACCUMULATOR
+        STA     CURROOM ;STORE ACCUMULATOR AS THE CURRENT ROOM
+        JMP     NRCHK   ;LOOP BACK TO NRCHK (NEW ROOM CHECK)
+;
+;       BAD RESPONSE FROM PLAYER (NOT N, S, E OR W)
+RSPBAD: LXI     D,MBADR ;DE=ADDRESS OF BAD RESPONSE MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+        CALL    BDOS
+        JMP     DISROOM ;DISPLAY ROOM & REPEAT DIRECTION QUERY
+;
+;       PRINT BAD DIRECTION
+DIRBAD: LXI     D,MBADD ;DE=ADDRESS OF BAD DIRECTION MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+        CALL BDOS
+        JMP     DISROOM ;DISPLAY ROOM AND REPEAT DIRECTION QUERY
+;
+        NOP
+        NOP
+        NOP;
+;
+;*******END OF PART 1********

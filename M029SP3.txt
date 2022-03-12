@@ -1,0 +1,481 @@
+;*******START OF PART 3********;
+;
+;       LABEL LEFT DOOR ROUTINE
+LBLLDR: NOP
+        LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     80H     ;MASK WITH FACING NORTH BIT
+        JZ      LLCHK2  ;NOT FACING NORTH CHECK IF FACING SOUTH
+;       LABEL LEFT DOOR AS WEST
+        LXI     H,WMESS        ;ADDRESS OF WEST MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LLDEST   ;LOAD DESTINATION ADDR
+LLCHK2: LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     40H     ;MASK WITH FACING SOUTH BIT
+        JZ      LLCHK3  ;NOT FACING SOUTH CHECK IF EAST
+;       LABEL LEFT DOOR AS EAST
+        LXI     H,EMESS        ;ADDRESS OF EAST MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LLDEST   ;LOAD DESTINATION ADDR
+LLCHK3: LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     20H     ;MASK WITH FACING EAST BIT
+        JZ      LLCHK4  ;NOT FACING EAST MUST BE WEST
+;       LABEL LEFT DOOR AS NORTH
+        LXI     H,NMESS        ;ADDRESS OF NORTH MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LLDEST   ;LOAD DESTINATION ADDR
+;       LABEL LEFT DOOR AS SOUTH (WHAT ELSE IS THERE?)
+LLCHK4: LXI     H,SMESS        ;ADDRESS OF EAST DOOR MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+LLDEST: LXI     H,MRMVIEW+448   ;ADDR OF DESTINATION TO HL
+        CALL    DISLBL  ;DISPLAY LABEL
+        RET
+;
+;       LABEL RIGHT DOOR ROUTINE
+LBLRDR: NOP
+        LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     80H     ;MASK WITH FACING NORTH BIT
+        JZ      LRCHK2  ;NOT FACING NORTH CHECK IF FACING SOUTH
+;       LABEL LEFT DOOR AS EAST
+        LXI     H,EMESS        ;ADDRESS OF EAST MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LRDEST   ;LOAD DESTINATION ADDR
+LRCHK2: LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     40H     ;MASK WITH FACING SOUTH BIT
+        JZ      LRCHK3  ;NOT FACING SOUTH CHECK IF EAST
+;       LABEL LEFT DOOR AS WEST
+        LXI     H,WMESS        ;ADDRESS OF WEST MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LRDEST   ;LOAD DESTINATION ADDR
+LRCHK3: LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     20H     ;MASK WITH FACING EAST BIT
+        JZ      LRCHK4  ;NOT FACING EAST MUST BE WEST
+;       LABEL LEFT DOOR AS SOUTH
+        LXI     H,SMESS        ;ADDRESS OF SOUTH MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LRDEST   ;LOAD DESTINATION ADDR
+;       LABEL LEFT DOOR AS NORTH (WHAT ELSE IS THERE?)
+LRCHK4: LXI     H,NMESS        ;ADDRESS OF EAST DOOR MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+LRDEST: LXI     H,MRMVIEW+479   ;ADDR OF DESTINATION TO HL
+        CALL    DISLBL  ;DISPLAY LABEL
+        RET
+;
+;       LABEL FORWARD DOOR ROUTINE
+LBLFDR: NOP
+        LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     80H     ;MASK WITH FACING NORTH BIT
+        JZ      LFCHK2  ;NOT FACING NORTH CHECK IF FACING SOUTH
+;       LABEL FORWARD DOOR AS NORTH
+        LXI     H,NMESS        ;ADDRESS OF NORTH MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LFDEST   ;LOAD DESTINATION ADDR
+LFCHK2: LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     40H     ;MASK WITH FACING SOUTH BIT
+        JZ      LFCHK3  ;NOT FACING SOUTH CHECK IF EAST
+;       LABEL FORWARD DOOR AS SOUTH
+        LXI     H,SMESS        ;ADDRESS OF SOUTH MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LFDEST   ;LOAD DESTINATION ADDR
+LFCHK3: LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     20H     ;MASK WITH FACING EAST BIT
+        JZ      LFCHK4  ;NOT FACING EAST MUST BE WEST
+;       LABEL FORWARD DOOR AS EAST
+        LXI     H,EMESS        ;ADDRESS OF EAST MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LFDEST   ;LOAD DESTINATION ADDR
+;       LABEL FORWARD DOOR AS WEST (WHAT ELSE IS THERE?)
+LFCHK4: LXI     H,WMESS        ;ADDRESS OF WEST DOOR MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+LFDEST: LXI     H,MRMVIEW+513   ;ADDR OF DESTINATION TO HL
+        CALL    DISLBL  ;DISPLAY LABEL
+        RET
+;
+;       LABEL BACK DOOR ROUTINE
+LBLBKR: NOP
+        LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     80H     ;MASK WITH FACING NORTH BIT
+        JZ      LBCHK2  ;NOT FACING NORTH CHECK IF FACING SOUTH
+;       LABEL BACK DOOR AS SOUTH
+        LXI     H,SDMESS        ;ADDRESS OF SOUTH DOOR MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LDEST   ;LOAD DESTINATION ADDR
+LBCHK2: LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     40H     ;MASK WITH FACING SOUTH BIT
+        JZ      LBCHK3  ;NOT FACING SOUTH CHECK IF EAST
+;       LABEL BACK DOOR AS NORTH
+        LXI     H,NDMESS        ;ADDRESS OF NORTH DOOR MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LDEST   ;LOAD DESTINATION ADDR
+LBCHK3: LDA     NORINT  ;GET ORIENTATION BYTE
+        ANI     20H     ;MASK WITH FACING EAST BIT
+        JZ      LBCHK4  ;NOT FACING EAST MUST BE WEST
+;       LABEL BACK DOOR AS WEST
+        LXI     H,WDMESS        ;ADDRESS OF WEST DOOR MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+        JMP     LDEST   ;LOAD DESTINATION ADDR
+;       LABEL BACK DOOR AS EAST (WHAT ELSE IS THERE?)
+LBCHK4: LXI     H,EDMESS        ;ADDRESS OF EAST DOOR MESSAGE TO HL
+        XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+LDEST:  LXI     H,MRMVIEW+804   ;ADDR OF DESTINATION TO HL
+        CALL    DISLBL  ;DISPLAY LABEL
+        RET
+;
+;       LABEL LEFT DOOR WORD
+LBLDRW: MVI     A,'D'   ;LOAD LETTER D INTO A
+        STA     MRMVIEW+497
+        MVI     A,'O'   ;LOAD LETTER O INTO A
+        STA     MRMVIEW+498
+        STA     MRMVIEW+499
+        MVI     A,'R'   ;LOAD LETTER R INTO A
+        STA     MRMVIEW+500
+        RET
+;
+;       LABEL RIGHT DOOR WORD
+LBRDRW: MVI     A,'D'   ;LOAD LETTER D INTO A
+        STA     MRMVIEW+528
+        MVI     A,'O'   ;LOAD LETTER O INTO A
+        STA     MRMVIEW+529
+        STA     MRMVIEW+530
+        MVI     A,'R'   ;LOAD LETTER R INTO A
+        STA     MRMVIEW+531
+        RET
+;
+;       LABEL FORWARD DOOR WORD
+LBFDRW: MVI     A,'D'   ;LOAD LETTER D INTO A
+        STA     MRMVIEW+562
+        MVI     A,'O'   ;LOAD LETTER O INTO A
+        STA     MRMVIEW+563
+        STA     MRMVIEW+564
+        MVI     A,'R'   ;LOAD LETTER R INTO A
+        STA     MRMVIEW+565
+        RET
+;
+;       DISPLAY LABEL ROUTINE
+;       ASSUME HL CONTAINS DESTINATION ADDRESS
+;       ASSUME DE CONTAINS SOURCE ADDRESS
+DISLBL: LDAX    D       ;LOAD ACCUM WITH SOURCE CHAR
+        CPI     '$'     ;CHECK IF TERMINATING CHARACTER
+        JZ      DDONE   ;IT IS, JUMP TO DISPLAY DONE
+        LDAX    D       ;LOAD ACCUM WITH SOURCE CHAR
+        XCHG            ;EXCHANGE DE WITH HL
+        STAX    D       ;STORE ACCUM TO DEST
+        INX     H       ;INCREMENT HL (SOURCE CHARS)
+        INX     D       ;INCREMENT DE (DEST ADDR)
+        XCHG            ;PUT SOURCE IN DE
+        JMP     DISLBL  ;DO NEXT CHARACTER
+DDONE:  RET
+;
+;       TURN INCREMENT
+TRINC:  PUSH   B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+        LDA     TCNT1   ;LOAD ACCUMULATOR WITH LEAST SIG DIGITS OF TURN COUNT
+        ADI     1       ;ADD 1 TO THE ACCUMULATOR
+        DAA             ;ADJUST THE ACCUMULATOR
+        JNC     TRST    ;NO CARRY SO UPDATE TCNT1, RESTORE REGISTERS AND RETURN
+;       THERE IS A CARRY SO INCREMENT MOST SIG DIGIT OF TURN COUNT
+        LDA     TCNT2   ;LOAD ACCUMULATOR WITH MOST SIG DIGIT OF TURN COUNT
+        ADI     1       ;ADD 1 TO THE ACCUMULATOR
+        STA     TCNT2   ;SAVE UPDATED TURN COUNT SIG DIGIT
+
+TRST:   LDA     TCNT1   ;LOAD ACCUMULATOR WITH LEAST SIG DIGITS OF TURN COUNT
+        ADI     1       ;ADD 1 TO THE ACCUMULATOR
+        DAA             ;ADJUST THE ACCUMULATOR
+        STA     TCNT1   ;SAVE UPDATED TURN COUNT
+        POP H   ; RETORE REGISTERS FOR TURN INREMENT ROUTINE
+        POP D
+        POP B
+        RET
+
+;       NEW ROOM INCREMENT
+NRINC:  PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+        LDA     NRCNT   ;LOAD A WITH BYTE CONTAINING THE NEW ROOM COUNT
+        ADI     1       ;ADD 1 TO THE ACCUMULATOR
+        DAA             ;ADJUST THE ACCUMULATOR
+        STA     NRCNT   ;SAVE UPDATED NEW TURN COUNT
+        POP     H       ;RESTORE REGISTERS
+        POP     D
+        POP     B
+        RET
+;
+;       DISPLAY TURN COUNT
+DTCNT:  PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+        LXI     D,MTRNUM        ;DE = ADDRESS OF TURN NUMBER MESSAGE
+        MVI     C,WRTLINE       ;C=BDOS WITE LIN
+        CALL    BDOS
+        LDA     TCNT2   ;LOAD ACCUMULATOR WITH MOST SIG DIGITS OF TURN COUNT
+        STA     BCDDIG  ;STORE TCNT2 IN BCD DIGIT BYTE
+        CALL    DBCDD   ;DISPLAY BCD DIGIT
+        LDA     TCNT1   ;LOAD ACCOUMULATER WITH LEAST SIG DIGITS OF TURN COUNT
+        STA     BCDDIG  ;STORE TCNT1 IN BCD DIGIT BYTE
+        CALL    DBCDD   ;DISPLAY BCD DIGIT
+        POP     H       ;RESTORE REGISTERS
+        POP     D
+        POP     B
+        RET
+;
+;       DISPLAY NEW ROOM COUNT
+DNRCNT: PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+        LXI     D,MNRCNT        ;DE = ADDRESS OF NEW ROOM COUNT MESS
+        MVI     C,WRTLINE       ;C=BDOS WITE LIN
+        CALL    BDOS
+        LDA     NRCNT   ;LOAD ACCUMULATOR WITH NEW ROOM COUNT
+        STA     BCDDIG  ;STORE NRCNT IN BCD DIGIT BYTE
+        CALL    DBCDD   ;DISPLAY BCD DIGIT
+        POP H   ; RETORE REGISTERS FOR TURN INREMENT ROUTINE
+        POP D
+        POP B
+        RET
+;
+;       DISPLAY BCD DIGITS FROM BYTE STORED AT BCDDIG
+DBCDD:  PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+;
+;       FIRST DO THE MOST SIGNIFICANT BCD DIGIT OF THE BYTE
+        LDA     BCDDIG  ;LOAD ACCUMULATOR WITH BYTE CONTAINING BCD DIGITS
+        RRC             ;ROTATE THE ACCUMULATOR RIGHT 4 TIMES TO MOVE THE
+        RRC             ;UPPER NIBBLE TO THE LOWER NIBBLE
+        RRC
+        RRC
+        ANI     0FH     ;CLEAR UPPER NIBBLE
+        ADI     30H     ;CONVERT TO ASCII
+        MOV     E,A     ;MOVE ACCUMULATOR TO E REGISTER
+        MVI     C,WCONF ;C=BDOS WRITE CHAR TO CONSOLE COMMAND
+        CALL    BDOS
+;
+;       NOW TO THE LEAST SIGNFICANT BCD DIGIT OF THE BYTE
+        LDA     BCDDIG  ;LOAD ACCOUMULATER WITH LEAST SIG DIGITS OF TURN COUNT
+        ANI     0FH     ;CLEAR UPPER NIBBLE
+        ADI     30H     ;CONVERT TO ASCII
+        MOV     E,A     ;MOVE ACCUMULATOR TO E REGISTER
+        MVI     C,WCONF ;C=BDOS WRITE CHAR TO CONSOLE COMMAND
+        CALL    BDOS
+
+        POP H   ; RETORE REGISTERS FOR TURN INREMENT ROUTINE
+        POP D
+        POP B
+        RET
+;
+;       Print Maze Subroutine
+pmaze:  push    b       ;save registers
+        push    d
+        push    h
+;       print northern edge of maze
+        mvi     c, wrtline
+        lxi     d, mnedge       ;Print Maze north edge
+        call    bdos
+;       Some preliminaries before the row loop
+;       Get Maze address and store in HL
+        lxi     h,maze  ;LOAD ADDRESS OF MAZE TO HL REGISTER
+        shld    HLREG1  ;Save address for debug
+        mov     a,m     ;MOVE OFFSET MAZE PARAMETER TO THE ACCUMULATOR
+        sta     prval   ;store value of room to be printed as prval
+        mvi     b,0ah   ;initialize counter to 10
+        ani     00h     ;Clear Accumulator
+        sta     proff;  ;store as accumulator offset
+rloop:  nop     ;This is the outer row loop
+        push    b;
+        lhld    HLREG1  ;Get current value of HL
+        shld    HLREG2  ;Save the location  - (start of the row)
+;       Some preliminaries before the column loop
+        mvi     c, wrtline
+        lxi     d, spc3
+        call    bdos    ;write 3 spaces
+;       print left side of maze
+        mvi     c,wconf
+        mvi     e,'|'
+        call    bdos
+        mvi     b,0ah   ;initialize counter to 10
+;       Here is the inner (column) loop
+cloop:  nop     ;this is the inner most column loop
+        push    b       ;Save b - (bdos calls mess with it)
+        lhld    HLREG1
+        mov     a,m     ;get value of maze
+        sta     prval   ;store it
+        inx     h       ;Increment the address in HL
+        shld    HLREG1
+;       Check if this is the current room
+        lda     proff   ;get printed room offset
+        mov     b,a     ;Move accumlator to b
+        lda     CUROFF  ;Get current room offset
+        cmp     b       ;compare a to b
+        jnz     strchk; Not the current room - check if start
+;       It is the start.  Print a ' X '
+        mvi     c,wrtline
+        lxi     d,msxs  ;message,space,letter X,space
+        call    bdos
+        jmp     edrchk  ;Check if there is an east door
+;       Check if this is the maze start
+strchk: lda     prval   ;get room value for print sub
+        ani     10h     ;AND with Start Mask
+        jz      finchk  ;Not the start - check if
+;       It is the start.  Print a ' S '
+        mvi     c,wrtline
+        lxi     d,msss  ;message,space,letter S,space
+        call    bdos
+        jmp     edrchk  ;Check if there is an east door
+;       Check if this is the maze finish
+finchk: lda     prval   ;get room value for print sub
+        ani     80h     ;AND with Exit Mask
+        jz     prmchk  ;Not the exit - print the contents
+;       print a ' F 'indicating room is the maze finish
+        mvi     c,wrtline
+        lxi     d,msfs  ;message,space,letter F,space
+        call    bdos
+        jmp     edrchk  ;Check if there is an east door
+;       Check if room has been visited
+prmchk: lda     prval   ;get room value for print sub
+        ani     40h     ;AND with Previous Visit Mask
+        jz      pspce   ;not visited before - print space
+;       print a ' . 'indicating room was previously visited
+        mvi     c,wrtline
+        lxi     d,msps  ;message,space,period,space
+        call    bdos
+        jmp     edrchk  ;Check if there is an east door
+pspce: nop     ;Print space
+;       print a space indicating room has not been visited
+        mvi     c,wrtline
+        lxi     d,spc3
+        call    bdos
+;       Check if there is an east door
+edrchk: lda     prval   ;get room value for print sub
+        ani     02h     ;AND with East Mask
+        jz      nedoor  ;no east door - print wall
+
+;       print a " " indicating room has an east door
+        mvi     c,wconf
+        mvi     e,' '
+        call    bdos
+        jmp     dec1b   ;go to end of 1st inner loop
+;       print a "|" indicating room has no east door
+nedoor: mvi     c,wconf
+        mvi     e,'|'
+        call    bdos
+;       Decrement 1st inner loop counter and loop back if not 0.
+dec1b:  lda     proff   ;get printed room offset
+        inr     a       ;increment accumulator
+        sta     proff   ;Should now have an updated offset
+        pop     b
+        dcr     b       ;decrement the counter
+        jnz     cloop    ;print the next line if not zero
+;End of cloop
+;       Print a cr/lf
+        mvi     c, wrtline
+        lxi     d, mcrlf
+        call    bdos    ;write a carriage return/line feed
+;       Do another inner (column) loop to do doors leading south
+;       Some preliminaries before the column loop
+        mvi     c, wrtline
+        lxi     d, spc3
+        call    bdos    ;write 3 spaces
+;       print bottom left corner of maze
+        mvi     c,wconf
+        mvi     e,'+'
+        call    bdos
+        lhld    HLREG2  ;Restore HL to beginning of the row
+        shld    HLREG1  ;Save as the working HL reg
+        mvi     b,0ah   ;initialize counter to 10
+cloop2: nop     ;This is the 2nd inner most column loop
+        push    b;
+        lhld    HLREG1  ;Can't tell who messed with it
+        mov     a,m     ;get value of maze
+        inx     h       ;increment address
+        shld    HLREG1  ;Save it before it gets corrupted
+        sta     prval   ;store it
+        ani     04h     ;AND with South Mask
+        jnz      nsdoor  ;no south door - print wall
+;       print characters indicating room has a south door
+        mvi     c,wrtline
+        lxi     d,sdoori
+        call    bdos
+        jmp     dec2b   ;jump to decrement 2nd B counter
+;       print characters indicating room has a south wall
+nsdoor: mvi     c,wrtline
+        lxi     d,sdoorv
+        call    bdos
+;       Decrement 2nd inner loop counter and loop back if not 0.
+dec2b:  pop     b
+        dcr     b       ;decrement the counter
+        jnz     cloop2    ;print the next line if not zero
+;       Print a cr/lf
+        mvi     c, wrtline
+        lxi     d, mcrlf
+        call    bdos    ;write a carriage return/line feed
+;       Decrement outer loop counter and loop back if not 0
+        pop     b
+        dcr     b       ;decrement the counter
+        jnz     rloop    ;print the next line if not zero
+;       restore registers
+        pop     h
+        pop     d
+        pop     b
+        ret
+;
+;       Update Maze Sub
+upmazs: push    b       ;save registers
+        push    d
+        push    h
+        lxi     h,maze  ;LOAD ADDRESS OF MAZE TO HL REGISTER
+        shld    HLREG1  ;Will later be the destination address
+        shld    HLREG2  ;Will later be the source address
+        lda     usmaz   ;Get User Selected Maze Number
+        mov     b,a     ;Move it to B
+        ani     255     ;Set z flag if usmaz =0
+        jz      movmaz  ;if =0, Go to move maze - no offset needed
+caloop: push    b
+        lhld    HLREG2
+        lxi     b,100   ;load increment acmount to regs b & C
+        DAD     B       ;add increment amount TO HL
+        shld    HLREG2  ;Store the result
+        pop     b       ;Get loop counter
+        dcr     b       ;decrement the counter
+        jnz     caloop  ;Add another 100 if not zero
+movmaz: nop     ;Move the Maze (even if no move is needed)
+;       Copy the maze from HLREG2 to HLREG1
+        mvi     b,100   ;initialize counter to 100
+mabyt:  push    b       ;Save B register
+        lhld    HLREG2  ;load source address
+        mov     a,m     ;Move byte from address in HL to accumulator
+        lhld    HLREG1  ;load destination address
+        mov     m,a     ;Save accum to address in HL
+        lhld    HLREG1  ;load destination address
+        mov     m,a     ;Save accum to address in HL
+        ani     10h     ;AND with Start Mask
+        jz      inxhl;  Not the start - continue
+        mvi     a,100   ;load accuml with 100
+        sub     b       ;Subtract B from 100
+        sta     mazesrt ;Save Starting Room Offset
+inxhl:  inx     h       ;increment HL
+        shld    HLREG1  ;Save new destination address
+        lhld    HLREG2  ;load new source address
+        inx     h       ;increment HL
+        shld    HLREG2  ;Save new Source address
+        pop     b
+        dcr     b       ;decrement
+        jnz     mabyt   ;move another byte is not zero
+;       restore registers
+        pop     h
+        pop     d
+        pop     b
+        ret
+;
+;       Press Enter to continue Sub
+prentr: CALL BDOS
+        LXI     D,mpentr        ;DE=ADDRESS OF Message to press enter
+        MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+        CALL BDOS
+;       GET  RESPONSE
+        LXI     D,INBUF ;DE=POINTER TO INPUT BUFFER
+        MVI     A,IBUFLEN       ;SET MAXSIZE TO READ
+        MVI     C,RDLINE        ;C=BDOS READ LINE COMMAND
+        CALL    BDOS
+        RET
+;
+;*******END OF PART 3********

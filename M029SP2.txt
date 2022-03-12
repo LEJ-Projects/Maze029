@@ -1,0 +1,341 @@
+
+;*******START OF PART 2********;
+;       SUBROUTINE AREA
+;
+;       DISPLAY 3D ROOM
+DIS3D:  PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+;
+;       PERFORM CHECKS FOR THE ADDING AND REMOVAL OF DOORS
+        LDA     NORINT  ;LOAD ORIENTATION BYTE
+        ANI     08H     ;CHECK IF LEFT DOOR IS PRESENT
+        JNZ     DLFT    ;DOOR ON THE LEFT
+        CALL    RMLEFT  ;REMOVE LEFT DOOR
+        JMP     DCHK2   ;GO TO DOOR CHECK 2 (FORWARD)
+DLFT:   CALL    ADLEFT  ;ADD LEFT DOOR
+DCHK2:  LDA     NORINT  ;LOAD ORIENTATION BYTE
+        ANI     04H     ;CHECK IF FORWARD DOOR IS PRESENT
+        JNZ     DFWD    ;DOOR IS FOWARD
+        CALL    RMFWD  ;REMOVE FORWARD DOOR
+        JMP     DCHK3   ;GO TO DOOR CHECK 3 (RIGHT)
+DFWD:   CALL    ADFWD   ;ADD FORWARD DOOR
+DCHK3:  LDA     NORINT  ;LOAD ORIENTATION BYTE
+        ANI     02H     ;CHECK IF RIGHT DOOR IS PRESENT
+        JNZ     DRGT    ;DOOR IS RIGHT
+        CALL    RMRGHT  ;REMOVE RIGHT DOOR
+        JMP     LBLBK   ;WE ARE DONE - LABEL THE BACK DOOR
+DRGT:   CALL    ADRGHT  ;ADD RIGHT DOOR
+LBLBK:  CALL    BKDRCK  ;BACK DOOR CHECK
+;
+        LXI     H,MRMVIEW       ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+;       PRINT NEXT LINE
+PNEXT:  MOV     D,H     ; LOAD D REG WITH H
+        MOV     E,L     ; LOAD E REG WITH L
+        MVI     C,WRTLINE       ;C=BDOS WRITE LINE
+        CALL    BDOS
+;
+        POP H   ; RESTORE REGISTERS FOR TURN INREMENT ROUTINE
+        POP D
+        POP B
+        RET
+;
+;       BACK DOOR CHECK
+BKDRCK: NOP
+        LDA     TCNT1   ;GET LEAST SIG BYTE OF TURN COUNT
+        CPI     01H     ;IS IT TURN 1?
+        JZ      BDCX    ;IF 1, GO TO BACK DOOR CHECK EXIT
+        CALL    LBLBKR  ;LABEL BACK DOOR
+        CALL    ADDAR   ;ADD DIRECTION ARROW
+BDCX:   RET             ;RETURN TO DISPLAY 3D ROOM ROUTINE (DIS3D)
+;
+;       ADD ARROW
+ADDAR:  MVI     A,'|'   ;ARROW SHAFT
+        STA     MRMVIEW+857
+        STA     MRMVIEW+858
+        MVI     A,'\'   ;LEFT SIDE OF ARROW
+        STA     MRMVIEW+906
+        MVI     A,'/'   ;RIGHT SIDE OF ARROW
+        STA     MRMVIEW+907
+        RET
+;
+;       REMOVE LEFT DOOR
+RMLEFT: PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+        MVI     A,' '   ;LOAD A SPACE INTO A
+        STA     MRMVIEW+250     ;UPPER LEFT CORNER OF DOOR
+        STA     MRMVIEW+302     ;UPPER PART OF DOOR
+        STA     MRMVIEW+354     ;UPPER PART OF DOOR
+        STA     MRMVIEW+406     ;UPPER PART OF DOOR
+;       NOW DO LEFT SIDE
+        MVI     B,0DH   ;INITIALIZE COUNTER TO 13
+        LXI     H,MRMVIEW+299   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX1:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX1    ;PRINT THE NEXT LINE IF NOT ZERO
+;       NOW DO RIGHT SIDE
+        MVI     B,06H   ;INITIALIZE COUNTER TO 6
+        LXI     H,MRMVIEW+455   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX2:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX2    ;PRINT THE NEXT LINE IF NOT ZERO
+;       DIRECTION LABEL
+        STA     MRMVIEW+448
+        STA     MRMVIEW+449
+        STA     MRMVIEW+450
+        STA     MRMVIEW+451
+        STA     MRMVIEW+452
+;       DOOR LABEL
+        STA     MRMVIEW+497
+        STA     MRMVIEW+498
+        STA     MRMVIEW+499
+        STA     MRMVIEW+500
+;       RESTORE REGISTERS
+        POP H
+        POP D
+        POP B
+        RET
+;
+;       REMOVE RIGHT DOOR
+RMRGHT: PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+        MVI     A,' '   ;LOAD A SPACE INTO A
+        STA     MRMVIEW+290     ;UPPER LEFT CORNER OF DOOR
+        STA     MRMVIEW+336     ;UPPER PART OF DOOR
+        STA     MRMVIEW+382     ;UPPER PART OF DOOR
+        STA     MRMVIEW+428     ;UPPER PART OF DOOR
+;       NOW DO RIGHT SIDE
+        MVI     B,0DH   ;INITIALIZE COUNTER TO 13
+        LXI     H,MRMVIEW+339   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX3:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX3    ;PRINT THE NEXT LINE IF NOT ZERO
+;       NOW DO LEFT SIDE
+        MVI     B,06H   ;INITIALIZE COUNTER TO 6
+        LXI     H,MRMVIEW+477   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX4:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX4    ;PRINT THE NEXT LINE IF NOT ZERO
+;       DIRECTION LABEL
+        STA     MRMVIEW+479
+        STA     MRMVIEW+480
+        STA     MRMVIEW+481
+        STA     MRMVIEW+482
+        STA     MRMVIEW+483
+;       DOOR LABEL
+        STA     MRMVIEW+528
+        STA     MRMVIEW+529
+        STA     MRMVIEW+530
+        STA     MRMVIEW+531
+;       RESTORE REGISTERS
+        POP H
+        POP D
+        POP B
+        RET
+;
+;       REMOVE FORWARD DOOR
+RMFWD:  PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+        MVI     A,' '   ;LOAD A SPACE INTO A
+;       NOW DO TOP
+        MVI     B,0BH   ;INITIALIZE COUNTER TO 11
+        LXI     H,MRMVIEW+412   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX5:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,01H   ;LOAD REGS DE WITH 01 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX5    ;PRINT THE NEXT LINE IF NOT ZERO
+;       NOW DO LEFT SIDE
+        STA     MRMVIEW+461     ;LEFT SIDE OF DOOR
+        STA     MRMVIEW+510
+        STA     MRMVIEW+559
+        STA     MRMVIEW+608
+        STA     MRMVIEW+657
+;       NOW DO RIGHT SIDE
+        STA     MRMVIEW+471     ;RIGHT SIDE OF DOOR
+        STA     MRMVIEW+520
+        STA     MRMVIEW+569
+        STA     MRMVIEW+618
+        STA     MRMVIEW+667
+;       DIRECTION LABEL
+        STA     MRMVIEW+513
+        STA     MRMVIEW+514
+        STA     MRMVIEW+515
+        STA     MRMVIEW+516
+        STA     MRMVIEW+517
+;       DOOR LABEL
+        STA     MRMVIEW+562
+        STA     MRMVIEW+563
+        STA     MRMVIEW+564
+        STA     MRMVIEW+565
+;       BASE OF FORWARD WALL
+        MVI     A,'-'   ;LOAD A DASH INTO A
+        STA     MRMVIEW+706
+        STA     MRMVIEW+716
+;       RESTORE REGISTERS
+        POP H
+        POP D
+        POP B
+        RET
+;
+;       ADD LEFT DOOR
+ADLEFT: PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+        MVI     A,'+'   ;LOAD A PLUS SIGN INTO A
+        STA     MRMVIEW+250     ;UPPER LEFT CORNER OF DOOR
+        STA     MRMVIEW+302     ;UPPER PART OF DOOR
+        STA     MRMVIEW+354     ;UPPER PART OF DOOR
+        STA     MRMVIEW+406     ;UPPER PART OF DOOR
+;       NOW DO LEFT SIDE
+        MVI     A,'|'   ;LOAD A VERTICAL LINE INTO A
+        MVI     B,0DH   ;INITIALIZE COUNTER TO 13
+        LXI     H,MRMVIEW+299   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX6:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX6    ;PRINT THE NEXT LINE IF NOT ZERO
+;       NOW DO RIGHT SIDE
+        MVI     B,06H   ;INITIALIZE COUNTER TO 6
+        LXI     H,MRMVIEW+455   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX7:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX7    ;PRINT THE NEXT LINE IF NOT ZERO
+;       DIRECTION LABEL
+        CALL LBLLDR     ;CALL LABEL LEFT DOOR ROUTINE
+        CALL LBLDRW     ;CALL LABEL LEFT DOOR WORD
+;       RESTORE REGISTERS
+        POP H
+        POP D
+        POP B
+        RET
+;
+;       ADD RIGHT DOOR
+ADRGHT: PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+        MVI     A,'+'   ;LOAD A PLUS SIGN INTO A
+        STA     MRMVIEW+290     ;UPPER LEFT CORNER OF DOOR
+        STA     MRMVIEW+336     ;UPPER PART OF DOOR
+        STA     MRMVIEW+382     ;UPPER PART OF DOOR
+        STA     MRMVIEW+428     ;UPPER PART OF DOOR
+;       NOW DO RIGHT SIDE;
+        MVI     A,'|'   ;LOAD A VERTICAL LINE INTO A
+        MVI     B,0DH   ;INITIALIZE COUNTER TO 13
+        LXI     H,MRMVIEW+339   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX8:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX8    ;PRINT THE NEXT LINE IF NOT ZERO
+;       NOW DO LEFT SIDE
+        MVI     B,06H   ;INITIALIZE COUNTER TO 6
+        LXI     H,MRMVIEW+477   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX9:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX9    ;PRINT THE NEXT LINE IF NOT ZERO
+;       DIRECTION LABEL
+        CALL LBLRDR     ;CALL LABEL RIGHT DOOR ROUTINE
+        CALL LBRDRW     ;CALL LABEL RIGHT DOOR WORD
+;       RESTORE REGISTERS
+        POP H
+        POP D
+        POP B
+        RET
+;
+;       ADD FORWARD DOOR
+ADFWD:  PUSH    B       ;SAVE REGISTERS
+        PUSH    D
+        PUSH    H
+;       NOW DO CORNERS
+        MVI     A,'+'   ;LOAD A PLUS SIGN INTO A
+        STA     MRMVIEW+412
+        STA     MRMVIEW+422
+        STA     MRMVIEW+706
+        STA     MRMVIEW+716
+;       NOW DO TOP
+        MVI     A,'-'   ;LOAD A DASH INTO A
+        MVI     B,09H   ;INITIALIZE COUNTER TO 9
+        LXI     H,MRMVIEW+413   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+        XCHG            ;EXCHANGE HL WITH DE
+PNX10:  STAX    D       ;STORE ACCUM TO MEM IN REG DE
+        XCHG            ;EXCHANGE DE WITH HL
+        LXI     D,01H   ;LOAD REGS DE WITH 01 DEC
+        DAD     D       ;ADD REGS DE TO HL
+        XCHG            ;EXCHANGE HL WITH DE
+;       TEST AND JUMP IF NOT DONE
+        DCR     B       ;DECREMENT THE COUNTER
+        JNZ     PNX10    ;PRINT THE NEXT LINE IF NOT ZERO
+;       NOW DO LEFT SIDE
+        MVI     A,'|'   ;LOAD A VERTICAL LINE INTO A
+        STA     MRMVIEW+461     ;LEFT SIDE OF DOOR
+        STA     MRMVIEW+510
+        STA     MRMVIEW+559
+        STA     MRMVIEW+608
+        STA     MRMVIEW+657
+;       NOW DO RIGHT SIDE
+        STA     MRMVIEW+471     ;RIGHT SIDE OF DOOR
+        STA     MRMVIEW+520
+        STA     MRMVIEW+569
+        STA     MRMVIEW+618
+        STA     MRMVIEW+667
+        CALL LBLFDR     ;CALL LABEL FORWARD DOOR ROUTINE
+        CALL LBFDRW     ;CALL LABEL FORWARD DOOR WORD
+;       RESTORE REGISTERS
+        POP H
+        POP D
+        POP B
+        RET
+;*******END OF PART 2********

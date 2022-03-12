@@ -1,0 +1,238 @@
+;*******START OF PART 4********;
+;
+;       DATA AREA
+MSEXIT: DB      CR,LF,'THERE IS AN EXIT TO THE $'
+MMEXIT: DB      CR,LF,'THERE ARE EXITS TO THE $'
+MBADR:  DB      CR,LF,'I DO NOT UNDERSTAND THAT DIRECTION $'
+MBADD:  DB      CR,LF,'THERE ARE NO EXITS IN THAT DIRECTION $'
+MPRRM:  DB      '     PREVIOUSLY VISITED ROOM $'
+MNEWRM: DB      '     NEW ROOM $'
+MTRNUM: DB      CR,LF,LF,'TURN NUMBER: $'
+MNRCNT: DB      '     NEW ROOMS VISITED: $'
+CURROOM: DB      05H
+CUROFF: DB      23H     ;CURRENT ROOM OFFSET
+NMESS:  DB      'NORTH $'
+SMESS:  DB      'SOUTH $'
+EMESS:  DB      'EAST $'
+WMESS:  DB      'WEST $'
+SDMESS: DB      'SOUTH DOOR $'
+NDMESS: DB      'NORTH DOOR $'
+EDMESS: DB      'EAST DOOR  $'
+WDMESS: DB      'WEST DOOR  $'
+MPROMPT: DB      CR,LF,'PLEASE SELECT A DIRECTION (1ST LETTER IS OK): $'
+INBUF:  DS      IBUFLEN+2
+LREG:   DB      00H
+HREG:   DB      00H
+TCNT1:  DB      00H     ;LEAST SIGNIFICANT DIGITS OF THE TURN COUNT
+TCNT2:  DB      00H     ;MOST SIGNIFICANT DIGIT OF THE TURN COUNT
+BCDDIG: DB      00H     ;BYTE CONTAINING 2 BCD DIGITS
+NRCNT:  DB      00H     ;BYTE INDICATING NEW ROOM COUNT
+NORINT: DB      00H     ;BYTE INDICATING NEW ORIENTATION
+OORINT: DB      00H     ;BYTE INDICATING OLD ORIENTATION
+DIRFAC: DB      53H     ;BYTE INDICATING DIRECTION FACING
+;
+maze:
+  DB  34H,06H,05H,22H,05H,06H,05H,06H,07H,05H
+  DB  0AH,0DH,0AH,03H,0DH,28H,0AH,09H,28H,0CH
+  DB  06H,09H,22H,05H,0EH,03H,07H,03H,05H,0CH
+  DB  0CH,06H,03H,09H,28H,24H,28H,06H,09H,0CH
+  DB  0CH,0CH,06H,07H,05H,0EH,05H,0CH,06H,09H
+  DB  0AH,0BH,09H,28H,0AH,09H,0CH,0AH,0BH,21H
+  DB  24H,06H,05H,06H,07H,07H,0BH,03H,03H,05H
+  DB  0AH,09H,0CH,0CH,28H,0CH,24H,22H,05H,0CH
+  DB  06H,05H,0AH,0FH,21H,0EH,0BH,05H,0CH,0CH
+  DB  0A8H,0AH,03H,09H,22H,0BH,21H,28H,0AH,09H
+;maze1
+  DB  24H,22H,03H,03H,03H,05H,06H,07H,21H,34H
+  DB  0EH,03H,03H,03H,07H,09H,0CH,0AH,03H,0DH
+  DB  28H,06H,05H,22H,0FH,21H,0CH,24H,24H,0CH
+  DB  06H,0DH,0AH,03H,0FH,05H,0EH,09H,0CH,0CH
+  DB  0CH,0CH,06H,21H,0CH,0AH,09H,06H,09H,0CH
+  DB  0CH,28H,0AH,03H,0FH,21H,24H,0AH,07H,09H
+  DB  0CH,22H,05H,06H,09H,24H,0CH,22H,0DH,24H
+  DB  0EH,21H,0CH,0AH,03H,0BH,0DH,24H,0AH,0DH
+  DB  0EH,21H,0EH,03H,07H,03H,0DH,0EH,21H,0CH
+  DB  28H,0A2H,09H,22H,0BH,21H,28H,0AH,03H,09H
+;MAZE2
+  DB  06H,21H,06H,07H,05H,32H,05H,06H,05H,24H
+  DB  0AH,03H,09H,0CH,0EH,05H,0AH,0DH,0CH,0CH
+  DB  06H,07H,05H,0CH,28H,0CH,24H,0CH,0CH,0CH
+  DB  0CH,0CH,0AH,0BH,21H,0AH,0BH,09H,0AH,09H
+  DB  0CH,0CH,22H,05H,22H,07H,03H,05H,22H,05H
+  DB  0CH,0AH,03H,09H,24H,0AH,05H,0AH,03H,0DH
+  DB  0AH,05H,24H,22H,0FH,03H,09H,06H,05H,0CH
+  DB  06H,09H,0CH,22H,0DH,22H,05H,0CH,0AH,0DH
+  DB  0EH,05H,0EH,03H,0FH,21H,0CH,0CH,22H,09H
+  DB  28H,0AH,0BH,21H,28H,0A2H,0BH,0BH,03H,21H
+;MAZE3
+  DB  06H,03H,03H,05H,06H,03H,03H,05H,32H,05H
+  DB  0CH,22H,05H,0AH,09H,06H,21H,0CH,06H,09H
+  DB  0AH,05H,0AH,03H,07H,09H,06H,0DH,0AH,05H
+  DB  06H,09H,06H,05H,0AH,05H,0CH,0CH,06H,09H
+  DB  0AH,05H,28H,0AH,05H,0CH,0CH,28H,0AH,05H
+  DB  06H,0BH,05H,22H,0FH,09H,0AH,03H,05H,0CH
+  DB  0CH,06H,09H,06H,0DH,06H,03H,05H,0AH,09H
+  DB  0CH,0CH,06H,0DH,0AH,09H,24H,0AH,07H,05H
+  DB  0CH,0CH,0CH,0AH,03H,05H,0EH,07H,09H,28H
+  DB  28H,0AH,09H,22H,03H,09H,0A8H,0AH,03H,21H
+;MAZE4
+  DB  06H,05H,16H,03H,03H,07H,21H,06H,03H,05H
+  DB  0CH,0AH,09H,22H,03H,0BH,07H,0DH,06H,09H
+  DB  0AH,05H,22H,07H,03H,05H,28H,28H,0AH,21H
+  DB  06H,0FH,21H,0AH,21H,0AH,07H,05H,22H,05H
+  DB  0CH,0AH,03H,03H,03H,03H,09H,0CH,06H,0DH
+  DB  0CH,06H,03H,03H,03H,03H,05H,0AH,0DH,0CH
+  DB  28H,0CH,06H,03H,03H,05H,0EH,05H,28H,0CH
+  DB  06H,09H,0AH,21H,06H,09H,0CH,0EH,03H,09H
+  DB  0EH,03H,03H,03H,09H,06H,0DH,28H,24H,24H
+  DB  0AH,03H,03H,21H,0A2H,09H,0AH,03H,0BH,09H
+;maze5
+  DB  24H,24H,06H,07H,21H,34H,22H,07H,03H,21H
+  DB  0CH,0CH,0CH,0CH,06H,09H,06H,0BH,03H,05H
+  DB  0EH,0DH,0CH,0EH,09H,06H,0BH,03H,05H,0CH
+  DB  0CH,0AH,09H,28H,06H,09H,06H,05H,28H,0CH
+  DB  0EH,05H,06H,05H,0AH,03H,09H,0CH,06H,09H
+  DB  0CH,0AH,09H,0AH,03H,03H,05H,0CH,0AH,21H
+  DB  28H,06H,07H,21H,06H,03H,0DH,0AH,03H,05H
+  DB  06H,09H,0AH,05H,0CH,22H,0BH,03H,05H,0CH
+  DB  0CH,06H,03H,0BH,0BH,05H,06H,03H,0BH,09H
+  DB  28H,0AH,21H,0A2H,03H,09H,0AH,03H,03H,21H
+;MAZE6
+  DB  22H,03H,05H,22H,05H,06H,05H,22H,15H,24H
+  DB  06H,05H,0CH,06H,0DH,28H,0AH,05H,0CH,0CH
+  DB  0CH,0CH,0CH,0CH,0AH,03H,03H,0DH,0EH,09H
+  DB  0CH,0AH,09H,0AH,05H,06H,05H,28H,0AH,05H
+  DB  0EH,05H,06H,05H,0AH,0DH,28H,06H,05H,0CH
+  DB  0CH,0AH,09H,0AH,03H,0BH,03H,09H,0CH,0CH
+  DB  0AH,21H,06H,03H,03H,03H,07H,21H,0AH,0DH
+  DB  06H,05H,0AH,05H,06H,05H,0CH,06H,03H,09H
+  DB  0CH,0CH,06H,0DH,0CH,28H,0EH,0DH,06H,05H
+  DB  28H,0AH,09H,0A8H,0AH,03H,09H,0AH,09H,28H
+;MAZE7
+  DB  24H,34H,24H,06H,05H,24H,22H,07H,07H,05H
+  DB  0AH,0BH,0BH,0DH,0AH,0BH,05H,28H,28H,0CH
+  DB  24H,06H,05H,0EH,03H,21H,0EH,05H,24H,0CH
+  DB  0EH,0DH,0AH,09H,22H,03H,09H,0CH,0CH,0CH
+  DB  28H,0CH,22H,03H,07H,03H,05H,0CH,0EH,09H
+  DB  22H,0BH,07H,05H,0AH,21H,0CH,0EH,0BH,21H
+  DB  06H,05H,0CH,28H,06H,03H,0DH,0AH,03H,05H
+  DB  0CH,0CH,0EH,05H,28H,06H,0DH,06H,03H,0DH
+  DB  0CH,0AH,09H,0AH,05H,0CH,28H,0CH,24H,0CH
+  DB  0AH,0A1H,22H,03H,09H,0AH,03H,09H,0AH,09H
+;MAZE8
+  DB  24H,34H,24H,06H,05H,24H,22H,07H,07H,05H
+  DB  0AH,0BH,0BH,0DH,0AH,0BH,05H,28H,28H,0CH
+  DB  24H,06H,05H,0EH,03H,21H,0EH,05H,24H,0CH
+  DB  0EH,0DH,0AH,09H,22H,03H,09H,0CH,0CH,0CH
+  DB  28H,0CH,22H,03H,07H,03H,05H,0CH,0EH,09H
+  DB  22H,0BH,07H,05H,0AH,21H,0CH,0EH,0BH,21H
+  DB  06H,05H,0CH,28H,06H,03H,0DH,0AH,03H,05H
+  DB  0CH,0CH,0EH,05H,28H,06H,0DH,06H,03H,0DH
+  DB  0CH,0AH,09H,0AH,05H,0CH,28H,0CH,24H,0CH
+  DB  0AH,0A1H,22H,03H,09H,0AH,03H,09H,0AH,09H
+;MAZE9
+  DB  06H,07H,03H,21H,06H,31H,06H,05H,06H,05H
+  DB  0CH,28H,06H,05H,0CH,06H,0DH,0CH,28H,0CH
+  DB  0CH,06H,09H,0CH,0AH,09H,28H,0CH,06H,09H
+  DB  0AH,09H,06H,09H,06H,03H,05H,0CH,0EH,05H
+  DB  06H,03H,09H,06H,0DH,06H,09H,0CH,28H,0CH
+  DB  0AH,05H,06H,09H,28H,0AH,03H,0DH,06H,0DH
+  DB  06H,09H,0CH,24H,06H,03H,05H,0CH,0CH,28H
+  DB  0AH,03H,09H,0AH,09H,06H,0FH,09H,0AH,05H
+  DB  22H,07H,03H,07H,03H,09H,0AH,03H,05H,0CH
+  DB  0A2H,0BH,21H,0AH,03H,03H,03H,21H,0AH,09H
+;
+mnedge: db      cr,lf,'   +---+---+---+---+---+---+---+---+---+---+',cr,lf,'$'
+mcrlf:  db      cr,lf,'$'
+spc3:   db      '   $'
+msfs:   db      ' F $'
+msss:   db      ' S $'
+msxs:   db      ' X $'
+msps    db      ' . $'
+sdoori: db      '---+$'
+sdoorv: db      '   +$'
+mmazpr: db      CR,LF,'PLEASE SELECT A MAZE (0 TO 9):$'
+MMAZER: DB      CR,LF,'BAD ENTRY - TRY AGAIN$';
+mpentr: DB      CR,LF,'PRESS ENTER TO CONTINUE:$'
+mghist: DB      CR,LF,'THE DOTS INDICATE WHERE YOU HAVE BEEN.$'
+;
+MRMVIEW: DB      CR,LF,'+-+-----------------------------------------+-+'
+LINE2:  DB      CR,LF,'|   +                                     +   |'
+LINE3:  DB      CR,LF,'|     +                                 +     |'
+        DB      CR,LF,'|       +                             +       |'
+        DB      CR,LF,'|         +                         +         |'
+        DB      CR,LF,'|  +        +                     +        +  |'
+        DB      CR,LF,'|  |  +       +-----------------+       +  |  |'
+        DB      CR,LF,'|  |     +    |                 |    +     |  |'
+        DB      CR,LF,'|  |        + |   +---------+   | +        |  |'
+        DB      CR,LF,'|  | NORTH  | |   |         |   | | SOUTH  |  |'
+        DB      CR,LF,'|  | DOOR   | |   |  EAST   |   | | DOOR   |  |'
+        DB      CR,LF,'|  |        | |   |  DOOR   |   | |        |  |'
+        DB      CR,LF,'|  |        | |   |         |   | |        |  |'
+        DB      CR,LF,'|  |        | |   |         |   | |        |  |'
+        DB      CR,LF,'|  |        | +---+---------+---+ |        |  |'
+        DB      CR,LF,'|  |        +                     +        |  |'
+        DB      CR,LF,'|  |      +                         +      |  |'
+        DB      CR,LF,'|  |    +                             +    |  |'
+        DB      CR,LF,'|  |  +                                 +  |  |'
+        DB      CR,LF,'+-+-----------------------------------------+-+$'
+;
+MMAZEX: DB      CR,LF,'   +---+---+---+---+---+---+---+---+---+---+'
+        DB      CR,LF,'   |       |       | S             |       |'
+        DB      CR,LF,'   +   +   +   +---+---+---+   +   +   +   +'
+        DB      CR,LF,'   |   |                       |       |   |'
+        DB      CR,LF,'   +   +---+   +   +---+---+   +---+---+   +'
+        DB      CR,LF,'   |       |   |       |           |       |'
+        DB      CR,LF,'   +   +   +-------+---+---+---+---+   +---+'
+        DB      CR,LF,'   |   |   |   * CONGRATULATIONS * |       |'
+        DB      CR,LF,'   +   +   +     ----------------  +---+   +'
+        DB      CR,LF,'   |   |   |        YOU HAVE       |       |'
+        DB      CR,LF,'   +   +---+      SUCCESSFULLY     +   +---+'
+        DB      CR,LF,'   |       |     FOUND THE MAZE    |       |'
+        DB      CR,LF,'   +---+   +          EXIT.        +---+   +'
+        DB      CR,LF,'   |   |   |       NICE JOB!!!     |   |   |'
+        DB      CR,LF,'   +   +   +---+---+---+---+---+---+   +   +'
+        DB      CR,LF,'   |   |               |       |           |'
+        DB      CR,LF,'   +   +---+   +---+   +   +   +---+---+   +'
+        DB      CR,LF,'   |           |       |   |               |'
+        DB      CR,LF,'   +   +---+---+   +---+---+---+   +   +---+'
+        DB      CR,LF,'   |       |             F |       |       |'
+        DB      CR,LF,'   +---+---+---+---+---+---+---+---+---+---+$'
+;
+MSPLASH: DB      CR,LF,'LEJ-PROJECTS                        MARCH 2022'
+        DB      CR,LF,'+-+-----------------------------------------+-+'
+        DB      CR,LF,'|   +                                     +   |'
+        DB      CR,LF,'|     +                                 +     |'
+        DB      CR,LF,'|       +-----------------------------+       |'
+        DB      CR,LF,'|       | +                         + |       |'
+        DB      CR,LF,'|       |   +                     +   |       |'
+        DB      CR,LF,'|       |     +-----------------+     |       |'
+        DB      CR,LF,'|       |     |     MAZE029     |     |       |'
+        DB      CR,LF,'|       |     |                 |     |       |'
+        DB      CR,LF,'|       |     |   A MAZE GAME   |     |       |'
+        DB      CR,LF,'|       |     |     FROM A      |     |       |'
+        DB      CR,LF,'|       |     |  RATS EYE VIEW  |     |       |'
+        DB      CR,LF,'|       |     |       BY        |     |       |'
+        DB      CR,LF,'|       |     |  LLOYD JOHNSON  |     |       |'
+        DB      CR,LF,'|       |     +-----------------+     |       |'
+        DB      CR,LF,'|       |   +                     +   |       |'
+        DB      CR,LF,'|       | +                         + |       |'
+        DB      CR,LF,'|       +-----------------------------+       |'
+        DB      CR,LF,'|     +                                 +     |'
+        DB      CR,LF,'+-+-----------------------------------------+-+$'
+;
+HLREG1: DS      2
+HLREG2: DS      2
+prval:  db      0       ;Room Value to be printed
+proff:  db      0       ;offset of room printed
+usmaz:  db      5       ;User Selected Maze (0-9)
+mazesrt db      4       ;offset of maze start
+exitoff db      95      ;offset of maze exit
+;
+;       SETUP STACK SPACE
+        DS      64      ; 40H LOCATIONS
+STAK:   DB      0       ; TOP OF STACK (STACK BUILDS DOWNWARDS IN MEMORY)
+
+        END
+;*******END OF PART 4********
+

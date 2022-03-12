@@ -1,0 +1,1657 @@
+
+
+
+                ;       MAZE029.ASM
+                ;       14 Dec 2020     L. Johnson      Initial Version
+                ;       27 Feb 2022     L. Johnson      Added additional mazes & f              eatures
+                ;       03 Mar 2022     L. Johnson      Update to use room paramet              ers for start & finish
+                ;
+                ;
+                ;
+ 0005 =         bdos    equ     5       ;jump vector to bdos
+ 0000 =         wboot   equ     0       ;vector to warm boot
+ 0002 =         wconf   equ     2       ;bdos write a character to console
+ 0009 =         wrtline equ     9       ;bdos write a line to the console
+ 000A =         rdline  equ     10      ;bdos read a line from console
+ 000D =         cr      equ     13      ;ascii carriage return
+ 000A =         lf      equ     10      ;ascii line feed
+ 0064 =         ibuflen equ     100     ;length of input buffer
+                ;
+                ;       Start Transient Program Area
+                ;
+ 0100                   org     0100h   ;CP/M expects us to start at 0100h
+
+                ;       Setup User Stack
+ 0100 31251B            lxi     sp,stak ;Load address of stack to stack pointer re              g
+                ;
+                ;       DISPLAY SPLASH MESSAGE
+ 0103 11D716            LXI     D,MSPLASH        ;DE=ADDRESS OF MAZE SPLASH MESSAG              E
+ 0106 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+ 0108 CD0500            CALL BDOS
+                ;
+                ;       QUERY PLAYER FOR MAZE NUMBER
+ 010B 11BE0E    QPLYRM: LXI     D,MMAZPR       ;DE=ADDRESS OF PROMPT MESSAGE
+ 010E 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+ 0110 CD0500            CALL BDOS
+                ;
+                ;       GET  RESPONSE
+ 0113 11150A            LXI     D,INBUF ;DE=POINTER TO INPUT BUFFER
+ 0116 3E64              MVI     A,IBUFLEN       ;SET MAXSIZE TO READ
+ 0118 12                STAX    D       ;STORE ACCUMLATOR TO THE INPUT BUFFER
+ 0119 0E0A              MVI     C,RDLINE        ;C=BDOS READ LINE COMMAND
+ 011B CD0500            CALL BDOS
+ 011E 3A170A            lda     inbuf+2 ;1st character of response
+ 0121 32E21A            sta     usmaz   ;Store as selected maze (will validate it               better later)
+
+                ;       validate the response
+ 0124 D630              sui     48      ;Convert from ASCII to binary
+ 0126 FA3101            jm      useler
+                ;       jmp     gdrsp
+ 0129 3AE21A    hichk:  lda     usmaz   ;Get User Selected Mase in ASCII
+ 012C D63A              sui     58      ;verify remainder is less than 10
+ 012E FA3C01            jm      gdrsp
+                ;
+                ;
+                ;       User Select Error
+ 0131 11DF0E    useler: LXI     D,mmazer       ;DE=ADDRESS OF Error MESSAGE
+ 0134 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+ 0136 CD0500            CALL BDOS
+ 0139 C30B01            jmp     qplyrm  ;Ask User again.
+
+                ;       Good response - convert from ASCII & store
+ 013C 3AE21A    gdrsp:  lda     usmaz   ;Get ASCII value
+ 013F D630              sui     48      ;Convert to binary
+ 0141 32E21A            sta     usmaz   ;Store it
+ 0144 CD5408            call    upmazs  ;Update the maze sub
+                ;
+                ;
+                ;       INITIALIZE CURRENT OFFSET TO MAZE START
+ 0147 3AE31A            LDA     MAZESRT       ;LOAD ACCUMULATOR WITH MAZE START
+ 014A 329909            STA     CUROFF  ;STORE MAZE START OFFSET TO CURRENT OFFSET
+                ;
+                ;       SET CURRENT ROOM FROM MAZESRT (STILL IN REG A)
+ 014D 21840A            LXI     H,MAZE  ;LOAD ADDRESS OF MAZE TO HL REGISTER
+ 0150 0600              MVI     B,0H    ;CLEAR B REGISTER
+ 0152 4F                MOV     C,A     ;MOVE CURRENT OFFSET (IN A) TO C
+ 0153 09                DAD     B       ;ADD CURRENT ROOM OFFSET TO HL
+ 0154 7E                MOV     A,M     ;MOVE OFFSET MAZE PARAMETER TO THE ACCUMUL              ATOR
+ 0155 329809            STA     CURROOM ;STORE ACCUMULATOR AS THE CURRENT ROOM
+                ;
+                ;
+                ;       CHECK IF NEW ROOM OR PREVIOUS ROOM
+ 0158 CDAC06    NRCHK:  CALL    TRINC   ; INCREMENT THE 3 BYTE BCD TURN COUNT
+ 015B CDDD06            CALL    DTCNT   ; DISPLAY TURN COUNT
+ 015E 3A9809            LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+ 0161 E640              ANI     40H     ;AND ACCUMULATOR WITH PRIOR ROOM VISIT MAS              K
+ 0163 CA7401            JZ      NEWRM   ;ITS ZERO SO IT MUST BE A NEW ROOM
+                ;       PRIOR VISIT
+ 0166 CDFE06            CALL    DNRCNT  ;DISPLAY NEW ROOM COUNT
+ 0169 114109            LXI     D,MPRRM ;DE = ADDRESS OF PRIOR ROOM MESSAGE
+ 016C 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+ 016E CD0500            CALL BDOS
+ 0171 C3AA01            JMP     CRTOR   ;CREATE ORIENTATION BYTE
+                ;
+                ;       NEW ROOM
+ 0174 CDCD06    NEWRM:  CALL    NRINC   ;INCREMENT NEW ROOM COUNT
+ 0177 CDFE06            CALL    DNRCNT  ;DISPLAY NEW ROOM COUNT
+ 017A 3A9809            LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+ 017D F640              ORI     40H     ;SET PRIOR ROOM FLAG
+ 017F 77                MOV     M,A     ;STORE UPDATED CURRENT ROOM
+ 0180 115F09            LXI     D,MNEWRM        ;DE = ADDRESS OF NEW ROOM MESSAGE
+ 0183 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+ 0185 CD0500            CALL BDOS
+                ;
+                ;       EXIT CHECK
+ 0188 3A9809    EXCHK:  LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+ 018B E680              ani     80h     ;AND with Exit Mask
+ 018D CAAA01            jz      crtor   ;Not the exit - create orientation byte
+                ;       MAZE EXIT FOUND
+ 0190 111013            LXI     D,MMAZEX        ;DE=ADDRESS OF MAZE EXIT MESSAGE
+ 0193 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+ 0195 CD0500            CALL BDOS
+ 0198 CDA808            call    prentr  ;Press enter to continue
+ 019B 0E09              mvi     c, wrtline
+ 019D 11120F            lxi     d, mghist       ;Dots indicate where you were
+ 01A0 CD0500            call    bdos
+ 01A3 CD3B07            call    pmaze
+ 01A6 CDA808            call    prentr
+ 01A9 C9                RET     ;RETURN TO CP/M - GAME IS FINISHED
+                ;
+                ;
+                ;       CREATE ORIENTATION BYTE
+                ;
+ 01AA 00        CRTOR:  NOP
+ 01AB 3A810A            LDA     NORINT  ;NEW ORIENTATION
+ 01AE 32820A            STA     OORINT  ;SAVE IT AS OLD ORIENTATION
+                ;       ASSUME WE ARE FACING NORTH
+ 01B1 0600              MVI     B,0H    ;ZERO OUT B REG
+ 01B3 3A9809            LDA     CURROOM ;LOAD CURRENT ROOM
+ 01B6 E608              ANI     08H     ;CHECK BIT 3 OF ROOM (N DOOR)
+ 01B8 CABF01            JZ      CHK2    ;NO N DOOR, CHECK FOR S DOOR
+ 01BB 78                MOV     A,B     ;MOVE B REG TO ACCUMULATOR
+ 01BC C644              ADI     44H     ;SET BOTH NIBS TO FORWARD DOOR
+ 01BE 47                MOV     B,A     ;MOVE ACCUMLATOR TO B REG
+ 01BF 3A9809    CHK2:   LDA     CURROOM ;LOAD CURRENT ROOM
+ 01C2 E604              ANI     04H     ;CHECK BIT 2 OF ROOM (S DOOR)
+ 01C4 CACB01            JZ      CHK1    ;NO S DOOR, CHECK FOR E DOOR
+ 01C7 78                MOV     A,B     ;MOVE B REG TO ACCUMULATOR
+ 01C8 C611              ADI     11H     ;SET BOTH NIBS TO BACK DOOR
+ 01CA 47                MOV     B,A     ;MOVE ACCUMLATOR TO B REG
+ 01CB 3A9809    CHK1:   LDA     CURROOM ;LOAD CURRENT ROOM
+ 01CE E602              ANI     02H     ;CHECK BIT 1 OF ROOM (E DOOR)
+ 01D0 CAD701            JZ      CHK0    ;NO E DOOR, CHECK FOR W DOOR
+ 01D3 78                MOV     A,B     ;MOVE B REG TO ACCUMULATOR
+ 01D4 C622              ADI     22H     ;SET BOTH NIBS TO RIGHT DOOR
+ 01D6 47                MOV     B,A     ;MOVE ACCUMLATOR TO B REG
+ 01D7 3A9809    CHK0:   LDA     CURROOM ;LOAD CURRENT ROOM
+ 01DA E601              ANI     01H     ;CHECK BIT 0 OF ROOM (W DOOR)
+ 01DC CAE301            JZ      TSTOR   ;JUMP TO TEST ACTUAL ORIENTATION
+ 01DF 78                MOV     A,B     ;MOVE B REG TO ACCUMULATOR
+ 01E0 C688              ADI     88H     ;SET BOTH NIBS TO LEFT DOOR
+ 01E2 47                MOV     B,A     ;MOVE ACCUMLATOR TO B REG
+                ;       FALL INTO TSTOR
+                ;
+                ;       TEST ROOM ORIENTATION
+                ;               B REG STILL HOLDS ORIENTATION BYTE
+                ;
+ 01E3 3A830A    TSTOR:  LDA DIRFAC      ;LAST USER ENTRY OR LETTER S (1ST TURN)
+ 01E6 FE4E              CPI     'N'     ;CHECK IF NORTH
+ 01E8 C2F401            JNZ     CHKW    ;NOT NORTH - CHECK WEST
+                ;       ITS NORTH
+ 01EB 78                MOV     A,B     ;MOVE B (NORINT) TO A
+ 01EC E60F              ANI     0FH     ;CLEAR UPPER NIBBLE
+ 01EE C680              ADI     80H     ;SET UPPER NIBBLE TO N
+ 01F0 47                MOV     B,A     ;MOVE ACCUM TO B REG
+ 01F1 C32302            JMP     SAVORT  ;JUMP TO SAVE ORIENTATION
+ 01F4 78        CHKW:   MOV     A,B     ;MOVE B (NORINT) TO A
+ 01F5 0F                RRC             ;SHIFT NORINT RIGHT 1 BIT
+ 01F6 47                MOV     B,A     ;SAVE NORINT IN B REG
+ 01F7 3A830A            LDA     DIRFAC  ;LAST USER ENTRY OR LETTER S (1ST TURN)
+ 01FA FE57              CPI     'W'     ;CHECK IF WEST
+ 01FC C20802            JNZ     CHKS    ;NOT WEST CHECK SOUTH
+                ;       ITS WEST
+ 01FF 78                MOV     A,B     ;MOVE B (NORINT) TO A
+ 0200 E60F              ANI     0FH     ;CLEAR UPPER NIBBLE
+ 0202 C610              ADI     10H     ;SET UPPER NIBBLE TO W
+ 0204 47                MOV     B,A     ;MOVE ACCUM TO B REG
+ 0205 C32302            JMP     SAVORT  ;JUMP TO SAVE ORIENTATION
+ 0208 78        CHKS:   MOV     A,B     ;MOVE B (NORINT) TO A
+ 0209 0F                RRC             ;SHIFT NORINT RIGHT 1 BIT
+ 020A 47                MOV     B,A     ;SAVE NORINT IN B REG
+ 020B 3A830A            LDA     DIRFAC  ;LAST USER ENTRY OR LETTER S (1ST TURN)
+ 020E FE53              CPI     'S'     ;CHECK IF SOUTH
+ 0210 C21C02            JNZ     SETE    ;NOT SOUTH MUST BE EAST
+                ;       ITS SOUTH
+ 0213 78                MOV     A,B     ;MOVE B (NORINT) TO A
+ 0214 E60F              ANI     0FH     ;CLEAR UPPER NIBBLE
+ 0216 C640              ADI     40H     ;SET UPPER NIBBLE TO S
+ 0218 47                MOV     B,A     ;MOVE ACCUM TO B REG
+ 0219 C32302            JMP     SAVORT  ;JUMP TO SAVE ORIENTATION
+                ;       ITS EAST
+                ;
+ 021C 78        SETE:   MOV     A,B     ;MOVE B (NORINT) TO A
+ 021D 0F                RRC             ;SHIFT NORINT RIGHT 1 BIT
+ 021E E60F              ANI     0FH     ;CLEAR UPPER NIBBLE
+ 0220 C620              ADI     20H     ;SET UPPER NIBBLE TO EAST
+ 0222 47                MOV     B,A     ;MOVE ACCUM TO B REG
+                ;       FALL INTO SAVE ORIENTATION
+                ;
+                ;       SAVE ORIENTATION
+ 0223 78        SAVORT: MOV     A,B     ;MOVE B (NORINT) TO A
+ 0224 32810A            STA     NORINT  ;SAVE IN NORINT
+                ;       FALL INTO DISPLAY ORIENTATION
+ 0227 00        DISORT: NOP             ;DISPLAY ORIENTATION
+ 0228 CD4A03            CALL    DIS3D   ;CALL 3D DISPLAY SUBROUTINE
+                ;
+ 022B 00        DISROOM: NOP     ;DISPLAY ROOM AND QUERY PLAYER FOR DIRECTION
+                ;
+                ;       TEST CURRENT ROOM TO SEE IF IT HAS ONLY ONE EXIT
+ 022C 3A9809            LDA     CURROOM ; LOAD ACCUMMULATOR WITH THE CURRENT ROOM
+ 022F E620              ANI     20H     ;AND THE ACCUMULATOR WITH THE SINGLE
+                                        ;EXIT MASK WORD
+ 0231 CA3F02            JZ      MEXITS  ;GO TO MANY EXITS SINCE Z FLAG WAS 0
+                ;
+                ;       DISPLAY TEXT FOR ROOM WITH ONLY ONE EXIT
+ 0234 11BE08            LXI     D,MSEXIT        ;DE = ADDRESS OF SINGLE EXIT MESSA              GE
+ 0237 0E09              MVI     C,WRTLINE       ;C=BDOS WITE LINE COMMAND
+ 0239 CD0500            CALL    BDOS
+ 023C C34702            JMP     DEXITS  ;DISPLAY AVAILABLE EXITS
+                ;
+                ;       DISPLAY TEXT FOR ROOM WITH MULTIPLE EXITS
+ 023F 11D908    MEXITS: LXI     D,MMEXIT        ;DE = ADDRESS OF MULTI EXIT MESSAG              E
+ 0242 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+ 0244 CD0500            CALL BDOS
+                ;       FALL INTO DEXITS
+                ;
+                ;       DISPLAY EXITS
+                ;
+ 0247 3A9809    DEXITS: LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+ 024A E608              ANI     08H     ;AND ACCUMULATOR WITH NORTH MASK
+ 024C CA5702            JZ      SCHK    ;JUMP TO SOUTH CHECK IF NO NORTH EXIT
+ 024F 119A09            LXI     D,NMESS ;PREPARE NORTH MESSAGE TO PRINT
+ 0252 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+ 0254 CD0500            CALL    BDOS
+ 0257 3A9809    SCHK:   LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+ 025A E604              ANI     04H     ;AND ACCUMULATOR WITH SOUTH MASK
+ 025C CA6702            JZ      ECHK    ;JUMP TO EAST CHECK IF NO SOUTH EXIT
+ 025F 11A109            LXI     D,SMESS ;PREPARE SOUTH MESSAGE TO PRINT
+ 0262 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMNAD
+ 0264 CD0500            CALL    BDOS
+ 0267 3A9809    ECHK:   LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+ 026A E602              ANI     02H     ;AND ACCUMULATOR WITH EAST MASK
+ 026C CA7702            JZ      WCHK    ;JUMP TO WEST CHECK IF NO EAST EXIT
+ 026F 11A809            LXI     D,EMESS ;PREPARE EAST MESSAGE TO PRINT
+ 0272 0E09              MVI     C,WRTLINE       ;C=-B\\BDOS WRITE COMMAND
+ 0274 CD0500            CALL    BDOS
+ 0277 3A9809    WCHK:   LDA     CURROOM ;LOAD ACCUMULATOR WITH THE CURRENT ROOM
+ 027A E601              ANI     01H     ;AND ACCUMULATOR WITH THE WEST MASK
+ 027C CA8702            JZ      QPLYR   ; JUMP TO QUERY THE PLAYER FOR DIRECTION
+ 027F 11AE09            LXI     D,WMESS ;PREPARE WEST MESSAGE TO PRINT
+ 0282 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+ 0284 CD0500            CALL    BDOS
+                ;
+                ;       QUERY PLAYER FOR DIRECTION
+                ;
+ 0287 11E409    QPLYR:  LXI     D,MPROMPT       ;DE=ADDRESS OF PROMPT MESSAGE
+ 028A 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE LINE COMMAND
+ 028C CD0500            CALL BDOS
+                ;
+                ;       GET PLAYER'S RESPONSE
+                ;
+ 028F 11150A            LXI     D,INBUF ;DE=POINTER TO INPUT BUFFER
+ 0292 3E64              MVI     A,IBUFLEN       ;SET MAXSIZE TO READ
+ 0294 12                STAX    D       ;STORE ACCUMLATOR TO THE INPUT BUFFER
+ 0295 0E0A              MVI     C,RDLINE        ;C=BDOS READ LINE COMMAND
+ 0297 CD0500            CALL BDOS
+                ;
+                ;       VALIDATE RESPONSE
+                ;
+ 029A 3A170A    VALRSP:  LDA     INBUF+2 ;GET 1ST CHARACTER OF THE RESPONSE
+ 029D E6DF              ANI     0DFH    ;CONVERT TO UPPER CASE
+ 029F 32170A            STA     INBUF+2 ;STORE FOR TESTING
+ 02A2 32830A            STA     DIRFAC  ;STORE FOR ORIENTATION TEST
+                ;
+                ;       CHECK FOR EXIT
+                ;
+ 02A5 FE58              CPI     'X'     ;COMPARE ACCUMULATOR WITH LETTER, X
+ 02A7 C2AB02            JNZ     PKEYP   ;NOT X, Check if letter P entered
+ 02AA C9                RET             ;RETURN TO CP/M
+                ;
+                ;       Check for Print Maze
+                ;
+ 02AB 00        pkeyp:  NOP     ;P key pressed check
+ 02AC FE50              CPI     'P'     ;COMPARE ACCUMULATOR WITH LETTER, P
+ 02AE C2B702            JNZ     NQUER   ;NOT P, JUMP TO NORTH QUERY CHECK
+ 02B1 CD3B07            call    pmaze
+ 02B4 C32B02            JMP     DISROOM ;DISPLAY exits AND REPEAT DIRECTION QUERY
+                ;
+                ;       CHECK FOR NORTH
+                ;
+ 02B7 FE4E      NQUER:   CPI     'N'     ;COMPARE ACCUMULATOR WITH LETTER, N
+ 02B9 C2CF02            JNZ     SQUER   ;NOT NORTH, JUMP TO SOUTH QUERY CHECK
+                ;
+                ;       ITS NORTH - CHECK IF NORTH IS A VALID DIRECTION
+ 02BC 3A9809            LDA     CURROOM ;PUT CURRENT ROOM INTO ACCUMULATOR
+ 02BF E608              ANI     08H     ;AND WITH NORTH MASK
+ 02C1 CA3C03            JZ      DIRBAD  ;THE DIRECTION IS BAD - PRINT MESSAGE
+                ;
+                ;       WE ARE GOING NORTH
+ 02C4 3A9909            LDA     CUROFF  ;LOAD ACCUMULATOR WITH CURRENT ROOM OFFSET
+ 02C7 D60A              SUI     0AH     ;SUBTRACT 10 FROM ROOM OFFSET
+ 02C9 329909            STA     CUROFF  ;STORE UPDATED ROOM OFFSET
+ 02CC C32003            JMP     UPDTRM  ;UPDATE TO NEW ROOM
+                ;
+                ;       CHECK FOR SOUTH
+                ;
+ 02CF 3A170A    SQUER:   LDA     INBUF+2 ;GET 1ST CHARACTER OF THE RESPONSE
+ 02D2 FE53              CPI     'S'     ;COMPARE THE ACCUMULATOR WITH THE LETTER,               S
+ 02D4 C2EA02            JNZ     EQUER   ;NOT SOUTH- JUMP TO EAST QUERY CHECK
+                ;
+                ;       ITS SOUTH - CHECK IF SOUTH IS A VALID DIRECTION
+ 02D7 3A9809            LDA     CURROOM ;PUT CURRENT ROOM INTO ACCUMULATOR
+ 02DA E604              ANI     04H     ;AND WITH SOUTH MASK
+ 02DC CA3C03            JZ      DIRBAD  ;THE DIRECTION IS BAD, PRINT MESSAGE
+                ;
+                ;       WE ARE GOING SOUTH
+ 02DF 3A9909            LDA     CUROFF  ;LOAD ACCUMULATOR WITH CURRENT OFFSET
+ 02E2 C60A              ADI     0AH     ;ADD 10 TO THE ROOM OFFSET
+ 02E4 329909            STA     CUROFF  ;STORE UPDATED ROOM OFFSET
+ 02E7 C32003            JMP     UPDTRM  ;JUMP TO UPDATE ROOM
+                ;
+                ;       CHECK FOR EAST
+                ;
+ 02EA 3A170A    EQUER:   LDA     INBUF+2 ;GET 1ST CHARACTER OF THE RESPONSE
+ 02ED FE45              CPI     'E'     ;COMPARE THE ACCUMULATOR WITH THE LETTER,               E
+ 02EF C20503            JNZ     WQUER   ;NOT EAST, JUMP TO WEST QUERY CHECK
+                ;
+                ;       ITS EAST - CHECK IF EAST IS A VALID DIRECTION
+ 02F2 3A9809            LDA     CURROOM ;PUT CURRENT ROOM INTO THE ACCUMULATOR
+ 02F5 E602              ANI     02H     ;AND WITH EAST MASK
+ 02F7 CA3C03            JZ      DIRBAD  ;THE DIRECTION IS BAD, PRINT MESSAGE
+                ;
+                ;       WE ARE GOING EAST
+ 02FA 3A9909            LDA     CUROFF  ;LOAD ACCUMULATOR WITH THE CURRENT ROOM OF              FSET
+ 02FD C601              ADI     01H     ;ADD 1 TO THE ROOM OFFSET
+ 02FF 329909            STA     CUROFF  ;STORE THE UPDATED ROOM OFFSET
+ 0302 C32003            JMP     UPDTRM  ;JUMP TO UPDATE ROOM
+                ;
+                ;       WEST CHECK
+                ;
+ 0305 3A170A    WQUER:  LDA     INBUF+2 ;GET 1ST CHARACTER OF THE RESPONSE
+ 0308 FE57              CPI     'W'     ;COMPARE ACCUMULATOR WITH THE LETTER, W
+ 030A C23103            JNZ     RSPBAD  ;NOT N,S,E OR W - PRINT BAD RESPONSE MESSA              GE
+                ;
+                ;       ITS WEST - CHECK IF WEST IS A VALID DIRECTION
+ 030D 3A9809            LDA     CURROOM ;PUT CURRENT ROOM INTO ACCUMULATOR
+ 0310 E601              ANI     01H     ;AND WITH WEST MASK
+ 0312 CA3C03            JZ      DIRBAD  ;THE DIRECTION IS BAD, PRINT MESSAGE
+                ;
+                ;       WE ARE GOING WEST
+ 0315 3A9909            LDA     CUROFF  ;LOAD ACCUMULATOR WITH CURRENT OFFSET
+ 0318 D601              SUI     01H     ;SUBTRACT 1 FROM THE ROOM OFFSET
+ 031A 329909            STA     CUROFF  ;STORE UPDATED ROOM OFFSET
+ 031D C32003            JMP     UPDTRM  ;JUMP TO UPDATE ROOM
+                ;
+                ;       UPDATE CURRENT ROOM
+ 0320 21840A    UPDTRM: LXI     H,MAZE  ;LOAD ADDRESS OF MAZE TO HL REGISTER
+ 0323 0600              MVI     B,0H    ;CLEAR B REGISTER
+ 0325 3A9909            LDA     CUROFF  ;MOVE CURRENT OFFSET TO ACCUMULATOR
+ 0328 4F                MOV     C,A     ;MOVE CURRENT OFFSET TO C
+ 0329 09                DAD     B       ;ADD CURRENT ROOM OFFSET TO HL
+ 032A 7E                MOV     A,M     ;MOVE OFFSET MAZE PARAMETER TO THE ACCUMUL              ATOR
+ 032B 329809            STA     CURROOM ;STORE ACCUMULATOR AS THE CURRENT ROOM
+ 032E C35801            JMP     NRCHK   ;LOOP BACK TO NRCHK (NEW ROOM CHECK)
+                ;
+                ;       BAD RESPONSE FROM PLAYER (NOT N, S, E OR W)
+ 0331 11F308    RSPBAD: LXI     D,MBADR ;DE=ADDRESS OF BAD RESPONSE MESSAGE
+ 0334 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+ 0336 CD0500            CALL    BDOS
+ 0339 C32B02            JMP     DISROOM ;DISPLAY ROOM & REPEAT DIRECTION QUERY
+                ;
+                ;       PRINT BAD DIRECTION
+ 033C 111909    DIRBAD: LXI     D,MBADD ;DE=ADDRESS OF BAD DIRECTION MESSAGE
+ 033F 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+ 0341 CD0500            CALL BDOS
+ 0344 C32B02            JMP     DISROOM ;DISPLAY ROOM AND REPEAT DIRECTION QUERY
+                ;
+ 0347 00                NOP
+ 0348 00                NOP
+ 0349 00                NOP;
+                ;
+                ;*******END OF PART 1********
+
+                ;*******START OF PART 2********;
+                ;       SUBROUTINE AREA
+                ;
+                ;       DISPLAY 3D ROOM
+ 034A C5        DIS3D:  PUSH    B       ;SAVE REGISTERS
+ 034B D5                PUSH    D
+ 034C E5                PUSH    H
+                ;
+                ;       PERFORM CHECKS FOR THE ADDING AND REMOVAL OF DOORS
+ 034D 3A810A            LDA     NORINT  ;LOAD ORIENTATION BYTE
+ 0350 E608              ANI     08H     ;CHECK IF LEFT DOOR IS PRESENT
+ 0352 C25B03            JNZ     DLFT    ;DOOR ON THE LEFT
+ 0355 CDB403            CALL    RMLEFT  ;REMOVE LEFT DOOR
+ 0358 C35E03            JMP     DCHK2   ;GO TO DOOR CHECK 2 (FORWARD)
+ 035B CDB304    DLFT:   CALL    ADLEFT  ;ADD LEFT DOOR
+ 035E 3A810A    DCHK2:  LDA     NORINT  ;LOAD ORIENTATION BYTE
+ 0361 E604              ANI     04H     ;CHECK IF FORWARD DOOR IS PRESENT
+ 0363 C26C03            JNZ     DFWD    ;DOOR IS FOWARD
+ 0366 CD5804            CALL    RMFWD  ;REMOVE FORWARD DOOR
+ 0369 C36F03            JMP     DCHK3   ;GO TO DOOR CHECK 3 (RIGHT)
+ 036C CD3105    DFWD:   CALL    ADFWD   ;ADD FORWARD DOOR
+ 036F 3A810A    DCHK3:  LDA     NORINT  ;LOAD ORIENTATION BYTE
+ 0372 E602              ANI     02H     ;CHECK IF RIGHT DOOR IS PRESENT
+ 0374 C27D03            JNZ     DRGT    ;DOOR IS RIGHT
+ 0377 CD0604            CALL    RMRGHT  ;REMOVE RIGHT DOOR
+ 037A C38003            JMP     LBLBK   ;WE ARE DONE - LABEL THE BACK DOOR
+ 037D CDF204    DRGT:   CALL    ADRGHT  ;ADD RIGHT DOOR
+ 0380 CD9103    LBLBK:  CALL    BKDRCK  ;BACK DOOR CHECK
+                ;
+ 0383 213B0F            LXI     H,MRMVIEW       ;LOAD ADDRESS OF ROOM VIEW MESS TO               HL REG
+                ;       PRINT NEXT LINE
+ 0386 54        PNEXT:  MOV     D,H     ; LOAD D REG WITH H
+ 0387 5D                MOV     E,L     ; LOAD E REG WITH L
+ 0388 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE LINE
+ 038A CD0500            CALL    BDOS
+                ;
+ 038D E1                POP H   ; RESTORE REGISTERS FOR TURN INREMENT ROUTINE
+ 038E D1                POP D
+ 038F C1                POP B
+ 0390 C9                RET
+                ;
+                ;       BACK DOOR CHECK
+ 0391 00        BKDRCK: NOP
+ 0392 3A7D0A            LDA     TCNT1   ;GET LEAST SIG BYTE OF TURN COUNT
+ 0395 FE01              CPI     01H     ;IS IT TURN 1?
+ 0397 CAA003            JZ      BDCX    ;IF 1, GO TO BACK DOOR CHECK EXIT
+ 039A CD2A06            CALL    LBLBKR  ;LABEL BACK DOOR
+ 039D CDA103            CALL    ADDAR   ;ADD DIRECTION ARROW
+ 03A0 C9        BDCX:   RET             ;RETURN TO DISPLAY 3D ROOM ROUTINE (DIS3D)
+                ;
+                ;       ADD ARROW
+ 03A1 3E7C      ADDAR:  MVI     A,'|'   ;ARROW SHAFT
+ 03A3 329412            STA     MRMVIEW+857
+ 03A6 329512            STA     MRMVIEW+858
+ 03A9 3E5C              MVI     A,'\'   ;LEFT SIDE OF ARROW
+ 03AB 32C512            STA     MRMVIEW+906
+ 03AE 3E2F              MVI     A,'/'   ;RIGHT SIDE OF ARROW
+ 03B0 32C612            STA     MRMVIEW+907
+ 03B3 C9                RET
+                ;
+                ;       REMOVE LEFT DOOR
+ 03B4 C5        RMLEFT: PUSH    B       ;SAVE REGISTERS
+ 03B5 D5                PUSH    D
+ 03B6 E5                PUSH    H
+ 03B7 3E20              MVI     A,' '   ;LOAD A SPACE INTO A
+ 03B9 323510            STA     MRMVIEW+250     ;UPPER LEFT CORNER OF DOOR
+ 03BC 326910            STA     MRMVIEW+302     ;UPPER PART OF DOOR
+ 03BF 329D10            STA     MRMVIEW+354     ;UPPER PART OF DOOR
+ 03C2 32D110            STA     MRMVIEW+406     ;UPPER PART O
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+F DOOR
+                ;       NOW DO LEFT SIDE
+ 03C5 060D              MVI     B,0DH   ;INITIALIZE COUNTER TO 13
+ 03C7 216610            LXI     H,MRMVIEW+299   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 03CA EB                XCHG            ;EXCHANGE HL WITH DE
+ 03CB 12        PNX1:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 03CC EB                XCHG            ;EXCHANGE DE WITH HL
+ 03CD 113100            LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+ 03D0 19                DAD     D       ;ADD REGS DE TO HL
+ 03D1 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 03D2 05                DCR     B       ;DECREMENT THE COUNTER
+ 03D3 C2CB03            JNZ     PNX1    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       NOW DO RIGHT SIDE
+ 03D6 0606              MVI     B,06H   ;INITIALIZE COUNTER TO 6
+ 03D8 210211            LXI     H,MRMVIEW+455   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 03DB EB                XCHG            ;EXCHANGE HL WITH DE
+ 03DC 12        PNX2:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 03DD EB                XCHG            ;EXCHANGE DE WITH HL
+ 03DE 113100            LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+ 03E1 19                DAD     D       ;ADD REGS DE TO HL
+ 03E2 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 03E3 05                DCR     B       ;DECREMENT THE COUNTER
+ 03E4 C2DC03            JNZ     PNX2    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       DIRECTION LABEL
+ 03E7 32FB10            STA     MRMVIEW+448
+ 03EA 32FC10            STA     MRMVIEW+449
+ 03ED 32FD10            STA     MRMVIEW+450
+ 03F0 32FE10            STA     MRMVIEW+451
+ 03F3 32FF10            STA     MRMVIEW+452
+                ;       DOOR LABEL
+ 03F6 322C11            STA     MRMVIEW+497
+ 03F9 322D11            STA     MRMVIEW+498
+ 03FC 322E11            STA     MRMVIEW+499
+ 03FF 322F11            STA     MRMVIEW+500
+                ;       RESTORE REGISTERS
+ 0402 E1                POP H
+ 0403 D1                POP D
+ 0404 C1                POP B
+ 0405 C9                RET
+                ;
+                ;       REMOVE RIGHT DOOR
+ 0406 C5        RMRGHT: PUSH    B       ;SAVE REGISTERS
+ 0407 D5                PUSH    D
+ 0408 E5                PUSH    H
+ 0409 3E20              MVI     A,' '   ;LOAD A SPACE INTO A
+ 040B 325D10            STA     MRMVIEW+290     ;UPPER LEFT CORNER OF DOOR
+ 040E 328B10            STA     MRMVIEW+336     ;UPPER PART OF DOOR
+ 0411 32B910            STA     MRMVIEW+382     ;UPPER PART OF DOOR
+ 0414 32E710            STA     MRMVIEW+428     ;UPPER PART OF DOOR
+                ;       NOW DO RIGHT SIDE
+ 0417 060D              MVI     B,0DH   ;INITIALIZE COUNTER TO 13
+ 0419 218E10            LXI     H,MRMVIEW+339   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 041C EB                XCHG            ;EXCHANGE HL WITH DE
+ 041D 12        PNX3:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 041E EB                XCHG            ;EXCHANGE DE WITH HL
+ 041F 113100            LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+ 0422 19                DAD     D       ;ADD REGS DE TO HL
+ 0423 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 0424 05                DCR     B       ;DECREMENT THE COUNTER
+ 0425 C21D04            JNZ     PNX3    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       NOW DO LEFT SIDE
+ 0428 0606              MVI     B,06H   ;INITIALIZE COUNTER TO 6
+ 042A 211811            LXI     H,MRMVIEW+477   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 042D EB                XCHG            ;EXCHANGE HL WITH DE
+ 042E 12        PNX4:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 042F EB                XCHG            ;EXCHANGE DE WITH HL
+ 0430 113100            LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+ 0433 19                DAD     D       ;ADD REGS DE TO HL
+ 0434 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 0435 05                DCR     B       ;DECREMENT THE COUNTER
+ 0436 C22E04            JNZ     PNX4    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       DIRECTION LABEL
+ 0439 321A11            STA     MRMVIEW+479
+ 043C 321B11            STA     MRMVIEW+480
+ 043F 321C11            STA     MRMVIEW+481
+ 0442 321D11            STA     MRMVIEW+482
+ 0445 321E11            STA     MRMVIEW+483
+                ;       DOOR LABEL
+ 0448 324B11            STA     MRMVIEW+528
+ 044B 324C11            STA     MRMVIEW+529
+ 044E 324D11            STA     MRMVIEW+530
+ 0451 324E11            STA     MRMVIEW+531
+                ;       RESTORE REGISTERS
+ 0454 E1                POP H
+ 0455 D1                POP D
+ 0456 C1                POP B
+ 0457 C9                RET
+                ;
+                ;       REMOVE FORWARD DOOR
+ 0458 C5        RMFWD:  PUSH    B       ;SAVE REGISTERS
+ 0459 D5                PUSH    D
+ 045A E5                PUSH    H
+ 045B 3E20              MVI     A,' '   ;LOAD A SPACE INTO A
+                ;       NOW DO TOP
+ 045D 060B              MVI     B,0BH   ;INITIALIZE COUNTER TO 11
+ 045F 21D710            LXI     H,MRMVIEW+412   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 0462 EB                XCHG            ;EXCHANGE HL WITH DE
+ 0463 12        PNX5:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 0464 EB                XCHG            ;EXCHANGE DE WITH HL
+ 0465 110100            LXI     D,01H   ;LOAD REGS DE WITH 01 DEC
+ 0468 19                DAD     D       ;ADD REGS DE TO HL
+ 0469 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 046A 05                DCR     B       ;DECREMENT THE COUNTER
+ 046B C26304            JNZ     PNX5    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       NOW DO LEFT SIDE
+ 046E 320811            STA     MRMVIEW+461     ;LEFT SIDE OF DOOR
+ 0471 323911            STA     MRMVIEW+510
+ 0474 326A11            STA     MRMVIEW+559
+ 0477 329B11            STA     MRMVIEW+608
+ 047A 32CC11            STA     MRMVIEW+657
+                ;       NOW DO RIGHT SIDE
+ 047D 321211            STA     MRMVIEW+471     ;RIGHT SIDE OF DOOR
+ 0480 324311            STA     MRMVIEW+520
+ 0483 327411            STA     MRMVIEW+569
+ 0486 32A511            STA     MRMVIEW+618
+ 0489 32D611            STA     MRMVIEW+667
+                ;       DIRECTION LABEL
+ 048C 323C11            STA     MRMVIEW+513
+ 048F 323D11            STA     MRMVIEW+514
+ 0492 323E11            STA     MRMVIEW+515
+ 0495 323F11            STA     MRMVIEW+516
+ 0498 324011            STA     MRMVIEW+517
+                ;       DOOR LABEL
+ 049B 326D11            STA     MRMVIEW+562
+ 049E 326E11            STA     MRMVIEW+563
+ 04A1 326F11            STA     MRMVIEW+564
+ 04A4 327011            STA     MRMVIEW+565
+                ;       BASE OF FORWARD WALL
+ 04A7 3E2D              MVI     A,'-'   ;LOAD A DASH INTO A
+ 04A9 32FD11            STA     MRMVIEW+706
+ 04AC 320712            STA     MRMVIEW+716
+                ;       RESTORE REGISTERS
+ 04AF E1                POP H
+ 04B0 D1                POP D
+ 04B1 C1                POP B
+ 04B2 C9                RET
+                ;
+                ;       ADD LEFT DOOR
+ 04B3 C5        ADLEFT: PUSH    B       ;SAVE REGISTERS
+ 04B4 D5                PUSH    D
+ 04B5 E5                PUSH    H
+ 04B6 3E2B              MVI     A,'+'   ;LOAD A PLUS SIGN INTO A
+ 04B8 323510            STA     MRMVIEW+250     ;UPPER LEFT CORNER OF DOOR
+ 04BB 326910            STA     MRMVIEW+302     ;UPPER PART OF DOOR
+ 04BE 329D10            STA     MRMVIEW+354     ;UPPER PART OF DOOR
+ 04C1 32D110            STA     MRMVIEW+406     ;UPPER PART OF DOOR
+                ;       NOW DO LEFT SIDE
+ 04C4 3E7C              MVI     A,'|'   ;LOAD A VERTICAL LINE INTO A
+ 04C6 060D              MVI     B,0DH   ;INITIALIZE COUNTER TO 13
+ 04C8 216610            LXI     H,MRMVIEW+299   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 04CB EB                XCHG            ;EXCHANGE HL WITH DE
+ 04CC 12        PNX6:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 04CD EB                XCHG            ;EXCHANGE DE WITH HL
+ 04CE 113100            LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+ 04D1 19                DAD     D       ;ADD REGS DE TO HL
+ 04D2 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 04D3 05                DCR     B       ;DECREMENT THE COUNTER
+ 04D4 C2CC04            JNZ     PNX6    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       NOW DO RIGHT SIDE
+ 04D7 0606              MVI     B,06H   ;INITIALIZE COUNTER TO 6
+ 04D9 210211            LXI     H,MRMVIEW+455   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 04DC EB                XCHG            ;EXCHANGE HL WITH DE
+ 04DD 12        PNX7:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 04DE EB                XCHG            ;EXCHANGE DE WITH HL
+ 04DF 113100            LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+ 04E2 19                DAD     D       ;ADD REGS DE TO HL
+ 04E3 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 04E4 05                DCR     B       ;DECREMENT THE COUNTER
+ 04E5 C2DD04            JNZ     PNX7    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       DIRECTION LABEL
+ 04E8 CD7F05            CALL LBLLDR     ;CALL LABEL LEFT DOOR ROUTINE
+ 04EB CD6306            CALL LBLDRW     ;CALL LABEL LEFT DOOR WORD
+                ;       RESTORE REGISTERS
+ 04EE E1                POP H
+ 04EF D1                POP D
+ 04F0 C1                POP B
+ 04F1 C9                RET
+                ;
+                ;       ADD RIGHT DOOR
+ 04F2 C5        ADRGHT: PUSH    B       ;SAVE REGISTERS
+ 04F3 D5                PUSH    D
+ 04F4 E5                PUSH    H
+ 04F5 3E2B              MVI     A,'+'   ;LOAD A PLUS SIGN INTO A
+ 04F7 325D10            STA     MRMVIEW+290     ;UPPER LEFT CORNER OF DOOR
+ 04FA 328B10            STA     MRMVIEW+336     ;UPPER PART OF DOOR
+ 04FD 32B910            STA     MRMVIEW+382     ;UPPER PART OF DOOR
+ 0500 32E710            STA     MRMVIEW+428     ;UPPER PART OF DOOR
+                ;       NOW DO RIGHT SIDE;
+ 0503 3E7C              MVI     A,'|'   ;LOAD A VERTICAL LINE INTO A
+ 0505 060D              MVI     B,0DH   ;INITIALIZE COUNTER TO 13
+ 0507 218E10            LXI     H,MRMVIEW+339   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 050A EB                XCHG            ;EXCHANGE HL WITH DE
+ 050B 12        PNX8:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 050C EB                XCHG            ;EXCHANGE DE WITH HL
+ 050D 113100            LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+ 0510 19                DAD     D       ;ADD REGS DE TO HL
+ 0511 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 0512 05                DCR     B       ;DECREMENT THE COUNTER
+ 0513 C20B05            JNZ     PNX8    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       NOW DO LEFT SIDE
+ 0516 0606              MVI     B,06H   ;INITIALIZE COUNTER TO 6
+ 0518 211811            LXI     H,MRMVIEW+477   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 051B EB                XCHG            ;EXCHANGE HL WITH DE
+ 051C 12        PNX9:   STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 051D EB                XCHG            ;EXCHANGE DE WITH HL
+ 051E 113100            LXI     D,31H   ;LOAD REGS DE WITH 49 DEC
+ 0521 19                DAD     D       ;ADD REGS DE TO HL
+ 0522 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 0523 05                DCR     B       ;DECREMENT THE COUNTER
+ 0524 C21C05            JNZ     PNX9    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       DIRECTION LABEL
+ 0527 CDB805            CALL LBLRDR     ;CALL LABEL RIGHT DOOR ROUTINE
+ 052A CD7606            CALL LBRDRW     ;CALL LABEL RIGHT DOOR WORD
+                ;       RESTORE REGISTERS
+ 052D E1                POP H
+ 052E D1                POP D
+ 052F C1                POP B
+ 0530 C9                RET
+                ;
+                ;       ADD FORWARD DOOR
+ 0531 C5        ADFWD:  PUSH    B       ;SAVE REGISTERS
+ 0532 D5                PUSH    D
+ 0533 E5                PUSH    H
+                ;       NOW DO CORNERS
+ 0534 3E2B              MVI     A,'+'   ;LOAD A PLUS SIGN INTO A
+ 0536 32D710            STA     MRMVIEW+412
+ 0539 32E110            STA     MRMVIEW+422
+ 053C 32FD11            STA     MRMVIEW+706
+ 053F 320712            STA     MRMVIEW+716
+                ;       NOW DO TOP
+ 0542 3E2D              MVI     A,'-'   ;LOAD A DASH INTO A
+ 0544 0609              MVI     B,09H   ;INITIALIZE COUNTER TO 9
+ 0546 21D810            LXI     H,MRMVIEW+413   ;LOAD ADDRESS OF ROOM VIEW MESS TO HL REG
+ 0549 EB                XCHG            ;EXCHANGE HL WITH DE
+ 054A 12        PNX10:  STAX    D       ;STORE ACCUM TO MEM IN REG DE
+ 054B EB                XCHG            ;EXCHANGE DE WITH HL
+ 054C 110100            LXI     D,01H   ;LOAD REGS DE WITH 01 DEC
+ 054F 19                DAD     D       ;ADD REGS DE TO HL
+ 0550 EB                XCHG            ;EXCHANGE HL WITH DE
+                ;       TEST AND JUMP IF NOT DONE
+ 0551 05                DCR     B       ;DECREMENT THE COUNTER
+ 0552 C24A05            JNZ     PNX10    ;PRINT THE NEXT LINE IF NOT ZERO
+                ;       NOW DO LEFT SIDE
+ 0555 3E7C              MVI     A,'|'   ;LOAD A VERTICAL LINE INTO A
+ 0557 320811            STA     MRMVIEW+461     ;LEFT SIDE OF DOOR
+ 055A 323911            STA     MRMVIEW+510
+ 055D 326A11            STA     MRMVIEW+559
+ 0560 329B11            STA     MRMVIEW+608
+ 0563 32CC11            STA     MRMVIEW+657
+                ;       NOW DO RIGHT SIDE
+ 0566 321211            STA     MRMVIEW+471     ;RIGHT SIDE OF DOOR
+ 0569 324311            STA     MRMVIEW+520
+ 056C 327411            STA     MRMVIEW+569
+ 056F 32A511            STA     MRMVIEW+618
+ 0572 32D611            STA     MRMVIEW+667
+ 0575 CDF105            CALL LBLFDR     ;CALL LABEL FORWARD DOOR ROUTINE
+ 0578 CD8906            CALL LBFDRW     ;CALL LABEL FORWARD DOOR WORD
+                ;       RESTORE REGISTERS
+ 057B E1                POP H
+ 057C D1                POP D
+ 057D C1                POP B
+ 057E C9                RET
+                ;*******END OF PART 2********
+                ;*******START OF PART 3********;
+                ;
+                ;       LABEL LEFT DOOR ROUTINE
+ 057F 00        LBLLDR: NOP
+ 0580 3A810A            LDA     NORINT  ;GET ORIENTATION BYTE
+ 0583 E680              ANI     80H     ;MASK WITH FACING NORTH BIT
+ 0585 CA8F05            JZ      LLCHK2  ;NOT FACING NORTH CHECK IF FACING SOUTH
+                ;       LABEL LEFT DOOR AS WEST
+ 0588 21AE09            LXI     H,WMESS        ;ADDRESS OF WEST MESSAGE TO HL
+ 058B EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 058C C3B105            JMP     LLDEST   ;LOAD DESTINATION ADDR
+ 058F 3A810A    LLCHK2: LDA     NORINT  ;GET ORIENTATION BYTE
+ 0592 E640              ANI     40H     ;MASK WITH FACING SOUTH BIT
+ 0594 CA9E05            JZ      LLCHK3  ;NOT FACING SOUTH CHECK IF EAST
+                ;       LABEL LEFT DOOR AS EAST
+ 0597 21A809            LXI     H,EMESS        ;ADDRESS OF EAST MESSAGE TO HL
+ 059A EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 059B C3B105            JMP     LLDEST   ;LOAD DESTINATION ADDR
+ 059E 3A810A    LLCHK3: LDA     NORINT  ;GET ORIENTATION BYTE
+ 05A1 E620              ANI     20H     ;MASK WITH FACING EAST BIT
+ 05A3 CAAD05            JZ      LLCHK4  ;NOT FACING EAST MUST BE WEST
+                ;       LABEL LEFT DOOR AS NORTH
+ 05A6 219A09            LXI     H,NMESS        ;ADDRESS OF NORTH MESSAGE TO HL
+ 05A9 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 05AA C3B105            JMP     LLDEST   ;LOAD DESTINATION ADDR
+                ;       LABEL LEFT DOOR AS SOUTH (WHAT ELSE IS THERE?)
+ 05AD 21A109    LLCHK4: LXI     H,SMESS        ;ADDRESS OF EAST DOOR MESSAGE TO HL
+ 05B0 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 05B1 21FB10    LLDEST: LXI     H,MRMVIEW+448   ;ADDR OF DESTINATION TO HL
+ 05B4 CD9C06            CALL    DISLBL  ;DISPLAY LABEL
+ 05B7 C9                RET
+                ;
+                ;       LABEL RIGHT DOOR ROUTINE
+ 05B8 00        LBLRDR: NOP
+ 05B9 3A810A            LDA     NORINT  ;GET ORIENTATION BYTE
+ 05BC E680              ANI     80H     ;MASK WITH FACING NORTH BIT
+ 05BE CAC805            JZ      LRCHK2  ;NOT FACING NORTH CHECK IF FACING SOUTH
+                ;       LABEL LEFT DOOR AS EAST
+ 05C1 21A809            LXI     H,EMESS        ;ADDRESS OF EAST MESSAGE TO HL
+ 05C4 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 05C5 C3EA05            JMP     LRDEST   ;LOAD DESTINATION ADDR
+ 05C8 3A810A    LRCHK2: LDA     NORINT  ;GET ORIENTATION BYTE
+ 05CB E640              ANI     40H     ;MASK WITH FACING SOUTH BIT
+ 05CD CAD705            JZ      LRCHK3  ;NOT FACING SOUTH CHECK IF EAST
+                ;       LABEL LEFT DOOR AS WEST
+ 05D0 21AE09            LXI     H,WMESS        ;ADDRESS OF WEST MESSAGE TO HL
+ 05D3 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 05D4 C3EA05            JMP     LRDEST   ;LOAD DESTINATION ADDR
+ 05D7 3A810A    LRCHK3: LDA     NORINT  ;GET ORIENTATION BYTE
+ 05DA E620              ANI     20H     ;MASK WITH FACING EAST BIT
+ 05DC CAE605            JZ      LRCHK4  ;NOT FACING EAST MUST BE WEST
+                ;       LABEL LEFT DOOR AS SOUTH
+ 05DF 21A109            LXI     H,SMESS        ;ADDRESS OF SOUTH MESSAGE TO HL
+ 05E2 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 05E3 C3EA05            JMP     LRDEST   ;LOAD DESTINATION ADDR
+                ;       LABEL LEFT DOOR AS NORTH (WHAT ELSE IS THERE?)
+ 05E6 219A09    LRCHK4: LXI     H,NMESS        ;ADDRESS OF EAST DOOR MESSAGE TO HL
+ 05E9 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 05EA 211A11    LRDEST: LXI     H,MRMVIEW+479   ;ADDR OF DESTINATION TO HL
+ 05ED CD9C06            CALL    DISLBL  ;DISPLAY LABEL
+ 05F0 C9                RET
+                ;
+                ;       LABEL FORWARD DOOR ROUTINE
+ 05F1 00        LBLFDR: NOP
+ 05F2 3A810A            LDA     NORINT  ;GET ORIENTATION BYTE
+ 05F5 E680              ANI     80H     ;MASK WITH FACING NORTH BIT
+ 05F7 CA0106            JZ      LFCHK2  ;NOT FACING NORTH CHECK IF FACING SOUTH
+                ;       LABEL FORWARD DOOR AS NORTH
+ 05FA 219A09            LXI     H,NMESS        ;ADDRESS OF NORTH MESSAGE TO HL
+ 05FD EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 05FE C32306            JMP     LFDEST   ;LOAD DESTINATION ADDR
+ 0601 3A810A    LFCHK2: LDA     NORINT  ;GET ORIENTATION BYTE
+ 0604 E640              ANI     40H     ;MASK WITH FACING SOUTH BIT
+ 0606 CA1006            JZ      LFCHK3  ;NOT FACING SOUTH CHECK IF EAST
+                ;       LABEL FORWARD DOOR AS SOUTH
+ 0609 21A109            LXI     H,SMESS        ;ADDRESS OF SOUTH MESSAGE TO HL
+ 060C EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 060D C32306            JMP     LFDEST   ;LOAD DESTINATION ADDR
+ 0610 3A810A    LFCHK3: LDA     NORINT  ;GET ORIENTATION BYTE
+ 0613 E620              ANI     20H     ;MASK WITH FACING EAST BIT
+ 0615 CA1F06            JZ      LFCHK4  ;NOT FACING EAST MUST BE WEST
+                ;       LABEL FORWARD DOOR AS EAST
+ 0618 21A809            LXI     H,EMESS        ;ADDRESS OF EAST MESSAGE TO HL
+ 061B EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 061C C32306            JMP     LFDEST   ;LOAD DESTINATION ADDR
+                ;       LABEL FORWARD DOOR AS WEST (WHAT ELSE IS THERE?)
+ 061F 21AE09    LFCHK4: LXI     H,WMESS        ;ADDRESS OF WEST DOOR MESSAGE TO HL
+ 0622 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 0623 213C11    LFDEST: LXI     H,MRMVIEW+513   ;ADDR OF DESTINATION TO HL
+ 0626 CD9C06            CALL    DISLBL  ;DISPLAY LABEL
+ 0629 C9                RET
+                ;
+                ;       LABEL BACK DOOR ROUTINE
+ 062A 00        LBLBKR: NOP
+ 062B 3A810A            LDA     NORINT  ;GET ORIENTATION BYTE
+ 062E E680              ANI     80H     ;MASK WITH FACING NORTH BIT
+ 0630 CA3A06            JZ      LBCHK2  ;NOT FACING NORTH CHECK IF FACING SOUTH
+                ;       LABEL BACK DOOR AS SOUTH
+ 0633 21B409            LXI     H,SDMESS        ;ADDRESS OF SOUTH DOOR MESSAGE TO HL
+ 0636 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 0637 C35C06            JMP     LDEST   ;LOAD DESTINATION ADDR
+ 063A 3A810A    LBCHK2: LDA     NORINT  ;GET ORIENTATION BYTE
+ 063D E640              ANI     40H     ;MASK WITH FACING SOUTH BIT
+ 063F CA4906            JZ      LBCHK3  ;NOT FACING SOUTH CHECK IF EAST
+                ;       LABEL BACK DOOR AS NORTH
+ 0642 21C009            LXI     H,NDMESS        ;ADDRESS OF NORTH DOOR MESSAGE TO HL
+ 0645 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 0646 C35C06            JMP     LDEST   ;LOAD DESTINATION ADDR
+ 0649 3A810A    LBCHK3: LDA     NORINT  ;GET ORIENTATION BYTE
+ 064C E620              ANI     20H     ;MASK WITH FACING EAST BIT
+ 064E CA5806            JZ      LBCHK4  ;NOT FACING EAST MUST BE WEST
+                ;       LABEL BACK DOOR AS WEST
+ 0651 21D809            LXI     H,WDMESS        ;ADDRESS OF WEST DOOR MESSAGE TO HL
+ 0654 EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 0655 C35C06            JMP     LDEST   ;LOAD DESTINATION ADDR
+                ;       LABEL BACK DOOR AS EAST (WHAT ELSE IS THERE?)
+ 0658 21CC09    LBCHK4: LXI     H,EDMESS        ;ADDRESS OF EAST DOOR MESSAGE TO HL
+ 065B EB                XCHG    ;PUT SOURCE CHAR ADDR INTO DE
+ 065C 215F12    LDEST:  LXI     H,MRMVIEW+804   ;ADDR OF DESTINATION TO HL
+ 065F CD9C06            CALL    DISLBL  ;DISPLAY LABEL
+ 0662 C9                RET
+                ;
+                ;       LABEL LEFT DOOR WORD
+ 0663 3E44      LBLDRW: MVI     A,'D'   ;LOAD LETTER D INTO A
+ 0665 322C11            STA     MRMVIEW+497
+ 0668 3E4F              MVI     A,'O'   ;LOAD LETTER O INTO A
+ 066A 322D11            STA     MRMVIEW+498
+ 066D 322E11            STA     MRMVIEW+499
+ 0670 3E52              MVI     A,'R'   ;LOAD LETTER R INTO A
+ 0672 322F11            STA     MRMVIEW+500
+ 0675 C9                RET
+                ;
+                ;       LABEL RIGHT DOOR WORD
+ 0676 3E44      LBRDRW: MVI     A,'D'   ;LOAD LETTER D INTO A
+ 0678 324B11            STA     MRMVIEW+528
+ 067B 3E4F              MVI     A,'O'   ;LOAD LETTER O INTO A
+ 067D 324C11            STA     MRMVIEW+529
+ 0680 324D11            STA     MRMVIEW+530
+ 0683 3E52              MVI     A,'R'   ;LOAD LETTER R INTO A
+ 0685 324E11            STA     MRMVIEW+531
+ 0688 C9                RET
+                ;
+                ;       LABEL FORWARD DOOR WORD
+ 0689 3E44      LBFDRW: MVI     A,'D'   ;LOAD LETTER D INTO A
+ 068B 326D11            STA     MRMVIEW+562
+ 068E 3E4F              MVI     A,'O'   ;LOAD LETTER O INTO A
+ 0690 326E11            STA     MRMVIEW+563
+ 0693 326F11            STA     MRMVIEW+564
+ 0696 3E52              MVI     A,'R'   ;LOAD LETTER R INTO A
+ 0698 327011            STA     MRMVIEW+565
+ 069B C9                RET
+                ;
+                ;       DISPLAY LABEL ROUTINE
+                ;       ASSUME HL CONTAINS DESTINATION ADDRESS
+                ;       ASSUME DE CONTAINS SOURCE ADDRESS
+ 069C 1A        DISLBL: LDAX    D       ;LOAD ACCUM WITH SOURCE CHAR
+ 069D FE24              CPI     '$'     ;CHECK IF TERMINATING CHARACTER
+ 069F CAAB06            JZ      DDONE   ;IT IS, JUMP TO DISPLAY DONE
+ 06A2 1A                LDAX    D       ;LOAD ACCUM WITH SOURCE CHAR
+ 06A3 EB                XCHG            ;EXCHANGE DE WITH HL
+ 06A4 12                STAX    D       ;STORE ACCUM TO DEST
+ 06A5 23                INX     H       ;INCREMENT HL (SOURCE CHARS)
+ 06A6 13                INX     D       ;INCREMENT DE (DEST ADDR)
+ 06A7 EB                XCHG            ;PUT SOURCE IN DE
+ 06A8 C39C06            JMP     DISLBL  ;DO NEXT CHARACTER
+ 06AB C9        DDONE:  RET
+                ;
+                ;       TURN INCREMENT
+ 06AC C5        TRINC:  PUSH   B       ;SAVE REGISTERS
+ 06AD D5                PUSH    D
+ 06AE E5                PUSH    H
+ 06AF 3A7D0A            LDA     TCNT1   ;LOAD ACCUMULATOR WITH LEAST SIG DIGITS OF TURN COUNT
+ 06B2 C601              ADI     1       ;ADD 1 TO THE ACCUMULATOR
+ 06B4 27                DAA             ;ADJUST THE ACCUMULATOR
+ 06B5 D2C006            JNC     TRST    ;NO CARRY SO UPDATE TCNT1, RESTORE REGISTERS AND RETURN
+                ;       THERE IS A CARRY SO INCREMENT MOST SIG DIGIT OF TURN COUNT
+ 06B8 3A7E0A            LDA     TCNT2   ;LOAD ACCUMULATOR WITH MOST SIG DIGIT OF TURN COUNT
+ 06BB C601              ADI     1       ;ADD 1 TO THE ACCUMULATOR
+ 06BD 327E0A            STA     TCNT2   ;SAVE UPDATED TURN COUNT SIG DIGIT
+
+ 06C0 3A7D0A    TRST:   LDA     TCNT1   ;LOAD ACCUMULATOR WITH LEAST SIG DIGITS OF TURN COUNT
+ 06C3 C601              ADI     1       ;ADD 1 TO THE ACCUMULATOR
+ 06C5 27                DAA             ;ADJUST THE ACCUMULATOR
+ 06C6 327D0A            STA     TCNT1   ;SAVE UPDATED TURN COUNT
+ 06C9 E1                POP H   ; RETORE REGISTERS FOR TURN INREMENT ROUTINE
+ 06CA D1                POP D
+ 06CB C1                POP B
+ 06CC C9                RET
+
+                ;       NEW ROOM INCREMENT
+ 06CD C5        NRINC:  PUSH    B       ;SAVE REGISTERS
+ 06CE D5                PUSH    D
+ 06CF E5                PUSH    H
+ 06D0 3A800A            LDA     NRCNT   ;LOAD A WITH BYTE CONTAINING THE NEW ROOM COUNT
+ 06D3 C601              ADI     1       ;ADD 1 TO THE ACCUMULATOR
+ 06D5 27                DAA             ;ADJUST THE ACCUMULATOR
+ 06D6 32800A            STA     NRCNT   ;SAVE UPDATED NEW TURN COUNT
+ 06D9 E1                POP     H       ;RESTORE REGISTERS
+ 06DA D1                POP     D
+ 06DB C1                POP     B
+ 06DC C9                RET
+                ;
+                ;       DISPLAY TURN COUNT
+ 06DD C5        DTCNT:  PUSH    B       ;SAVE REGISTERS
+ 06DE D5                PUSH    D
+ 06DF E5                PUSH    H
+ 06E0 116E09            LXI     D,MTRNUM        ;DE = ADDRESS OF TURN NUMBER MESSAGE
+ 06E3 0E09              MVI     C,WRTLINE       ;C=BDOS WITE LIN
+ 06E5 CD0500            CALL    BDOS
+ 06E8 3A7E0A            LDA     TCNT2   ;LOAD ACCUMULATOR WITH MOST SIG DIGITS OF TURN COUNT
+ 06EB 327F0A            STA     BCDDIG  ;STORE TCNT2 IN BCD DIGIT BYTE
+ 06EE CD1607            CALL    DBCDD   ;DISPLAY BCD DIGIT
+ 06F1 3A7D0A            LDA     TCNT1   ;LOAD ACCOUMULATER WITH LEAST SIG DIGITS OF TURN COUNT
+ 06F4 327F0A            STA     BCDDIG  ;STORE TCNT1 IN BCD DIGIT BYTE
+ 06F7 CD1607            CALL    DBCDD   ;DISPLAY BCD DIGIT
+ 06FA E1                POP     H       ;RESTORE REGISTERS
+ 06FB D1                POP     D
+ 06FC C1                POP     B
+ 06FD C9                RET
+                ;
+                ;       DISPLAY NEW ROOM COUNT
+ 06FE C5        DNRCNT: PUSH    B       ;SAVE REGISTERS
+ 06FF D5                PUSH    D
+ 0700 E5                PUSH    H
+ 0701 117F09            LXI     D,MNRCNT        ;DE = ADDRESS OF NEW ROOM COUNT MESS
+ 0704 0E09              MVI     C,WRTLINE       ;C=BDOS WITE LIN
+ 0706 CD0500            CALL    BDOS
+ 0709 3A800A            LDA     NRCNT   ;LOAD ACCUMULATOR WITH NEW ROOM COUNT
+ 070C 327F0A            STA     BCDDIG  ;STORE NRCNT IN BCD DIGIT BYTE
+ 070F CD1607            CALL    DBCDD   ;DISPLAY BCD DIGIT
+ 0712 E1                POP H   ; RETORE REGISTERS FOR TURN INREMENT ROUTINE
+ 0713 D1                POP D
+ 0714 C1                POP B
+ 0715 C9                RET
+                ;
+                ;       DISPLAY BCD DIGITS FROM BYTE STORED AT BCDDIG
+ 0716 C5        DBCDD:  PUSH    B       ;SAVE REGISTERS
+ 0717 D5                PUSH    D
+ 0718 E5                PUSH    H
+                ;
+                ;       FIRST DO THE MOST SIGNIFICANT BCD DIGIT OF THE BYTE
+ 0719 3A7F0A            LDA     BCDDIG  ;LOAD ACCUMULATOR WITH BYTE CONTAINING BCD DIGITS
+ 071C 0F                RRC             ;ROTATE THE ACCUMULATOR RIGHT 4 TIMES TO MOVE THE
+ 071D 0F                RRC             ;UPPER NIBBLE TO THE LOWER NIBBLE
+ 071E 0F                RRC
+ 071F 0F                RRC
+ 0720 E60F              ANI     0FH     ;CLEAR UPPER NIBBLE
+ 0722 C630              ADI     30H     ;CONVERT TO ASCII
+ 0724 5F                MOV     E,A     ;MOVE ACCUMULATOR TO E REGISTER
+ 0725 0E02              MVI     C,WCONF ;C=BDOS WRITE CHAR TO CONSOLE COMMAND
+ 0727 CD0500            CALL    BDOS
+                ;
+                ;       NOW TO THE LEAST SIGNFICANT BCD DIGIT OF THE BYTE
+ 072A 3A7F0A            LDA     BCDDIG  ;LOAD ACCOUMULATER WITH LEAST SIG DIGITS OF TURN COUNT
+ 072D E60F              ANI     0FH     ;CLEAR UPPER NIBBLE
+ 072F C630              ADI     30H     ;CONVERT TO ASCII
+ 0731 5F                MOV     E,A     ;MOVE ACCUMULATOR TO E REGISTER
+ 0732 0E02              MVI     C,WCONF ;C=BDOS WRITE CHAR TO CONSOLE COMMAND
+ 0734 CD0500            CALL    BDOS
+
+ 0737 E1                POP H   ; RETORE REGISTERS FOR TURN INREMENT ROUTINE
+ 0738 D1                POP D
+ 0739 C1                POP B
+ 073A C9                RET
+                ;
+                ;       Print Maze Subroutine
+ 073B C5        pmaze:  push    b       ;save registers
+ 073C D5                push    d
+ 073D E5                push    h
+                ;       print northern edge of maze
+ 073E 0E09              mvi     c, wrtline
+ 0740 116C0E            lxi     d, mnedge       ;Print Maze north edge
+ 0743 CD0500            call    bdos
+                ;       Some preliminaries before the row loop
+                ;       Get Maze address and store in HL
+ 0746 21840A            lxi     h,maze  ;LOAD ADDRESS OF MAZE TO HL REGISTER
+ 0749 22DC1A            shld    HLREG1  ;Save address for debug
+ 074C 7E                mov     a,m     ;MOVE OFFSET MAZE PARAMETER TO THE ACCUMULATOR
+ 074D 32E01A            sta     prval   ;store value of room to be printed as prval
+ 0750 060A              mvi     b,0ah   ;initialize counter to 10
+ 0752 E600              ani     00h     ;Clear Accumulator
+ 0754 32E11A            sta     proff;  ;store as accumulator offset
+ 0757 00        rloop:  nop     ;This is the outer row loop
+ 0758 C5                push    b;
+ 0759 2ADC1A            lhld    HLREG1  ;Get current value of HL
+ 075C 22DE1A            shld    HLREG2  ;Save the location  - (start of the row)
+                ;       Some preliminaries before the column loop
+ 075F 0E09              mvi     c, wrtline
+ 0761 11A00E            lxi     d, spc3
+ 0764 CD0500            call    bdos    ;write 3 spaces
+                ;       print left side of maze
+ 0767 0E02              mvi     c,wconf
+ 0769 1E7C              mvi     e,'|'
+ 076B CD0500            call    bdos
+ 076E 060A              mvi     b,0ah   ;initialize counter to 10
+                ;       Here is the inner (column) loop
+ 0770 00        cloop:  nop     ;this is the inner most column loop
+ 0771 C5                push    b       ;Save b - (bdos calls mess with it)
+ 0772 2ADC1A            lhld    HLREG1
+ 0775 7E                mov     a,m     ;get value of maze
+ 0776 32E01A            sta     prval   ;store it
+ 0779 23                inx     h       ;Increment the address in HL
+ 077A 22DC1A            shld    HLREG1
+                ;       Check if this is the current room
+ 077D 3AE11A            lda     proff   ;get printed room offset
+ 0780 47                mov     b,a     ;Move accumlator to b
+ 0781 3A9909            lda     CUROFF  ;Get current room offset
+ 0784 B8                cmp     b       ;compare a to b
+ 0785 C29307            jnz     strchk; Not the current room - check if start
+                ;       It is the start.  Print a ' X '
+ 0788 0E09              mvi     c,wrtline
+ 078A 11AC0E            lxi     d,msxs  ;message,space,letter X,space
+ 078D CD0500            call    bdos
+ 0790 C3D507            jmp     edrchk  ;Check if there is an east door
+                ;       Check if this is the maze start
+ 0793 3AE01A    strchk: lda     prval   ;get room value for print sub
+ 0796 E610              ani     10h     ;AND with Start Mask
+ 0798 CAA607            jz      finchk  ;Not the start - check if
+                ;       It is the start.  Print a ' S '
+ 079B 0E09              mvi     c,wrtline
+ 079D 11A80E            lxi     d,msss  ;message,space,letter S,space
+ 07A0 CD0500            call    bdos
+ 07A3 C3D507            jmp     edrchk  ;Check if there is an east door
+                ;       Check if this is the maze finish
+ 07A6 3AE01A    finchk: lda     prval   ;get room value for print sub
+ 07A9 E680              ani     80h     ;AND with Exit Mask
+ 07AB CAB907            jz     prmchk  ;Not the exit - print the contents
+                ;       print a ' F 'indicating room is the maze finish
+ 07AE 0E09              mvi     c,wrtline
+ 07B0 11A40E            lxi     d,msfs  ;message,space,letter F,space
+ 07B3 CD0500            call    bdos
+ 07B6 C3D507            jmp     edrchk  ;Check if there is an east door
+                ;       Check if room has been visited
+ 07B9 3AE01A    prmchk: lda     prval   ;get room value for print sub
+ 07BC E640              ani     40h     ;AND with Previous Visit Mask
+ 07BE CACC07            jz      pspce   ;not visited before - print space
+                ;       print a ' . 'indicating room was previously visited
+ 07C1 0E09              mvi     c,wrtline
+ 07C3 11B00E            lxi     d,msps  ;message,space,period,space
+ 07C6 CD0500            call    bdos
+ 07C9 C3D507            jmp     edrchk  ;Check if there is an east door
+ 07CC 00        pspce: nop     ;Print space
+                ;       print a space indicating room has not been visited
+ 07CD 0E09              mvi     c,wrtline
+ 07CF 11A00E            lxi     d,spc3
+ 07D2 CD0500            call    bdos
+                ;       Check if there is an east door
+ 07D5 3AE01A    edrchk: lda     prval   ;get room value for print sub
+ 07D8 E602              ani     02h     ;AND with East Mask
+ 07DA CAE707            jz      nedoor  ;no east door - print wall
+
+                ;       print a " " indicating room has an east door
+ 07DD 0E02              mvi     c,wconf
+ 07DF 1E20              mvi     e,' '
+ 07E1 CD0500            call    bdos
+ 07E4 C3EE07            jmp     dec1b   ;go to end of 1st inner loop
+                ;       print a "|" indicating room has no east door
+ 07E7 0E02      nedoor: mvi     c,wconf
+ 07E9 1E7C              mvi     e,'|'
+ 07EB CD0500            call    bdos
+                ;       Decrement 1st inner loop counter and loop back if not 0.
+ 07EE 3AE11A    dec1b:  lda     proff   ;get printed room offset
+ 07F1 3C                inr     a       ;increment accumulator
+ 07F2 32E11A            sta     proff   ;Should now have an updated offset
+ 07F5 C1                pop     b
+ 07F6 05                dcr     b       ;decrement the counter
+ 07F7 C27007            jnz     cloop    ;print the next line if not zero
+                ;End of cloop
+                ;       Print a cr/lf
+ 07FA 0E09              mvi     c, wrtline
+ 07FC 119D0E            lxi     d, mcrlf
+ 07FF CD0500            call    bdos    ;write a carriage return/line feed
+                ;       Do another inner (column) loop to do doors leading south
+                ;       Some preliminaries before the column loop
+ 0802 0E09              mvi     c, wrtline
+ 0804 11A00E            lxi     d, spc3
+ 0807 CD0500            call    bdos    ;write 3 spaces
+                ;       print bottom left corner of maze
+ 080A 0E02              mvi     c,wconf
+ 080C 1E2B              mvi     e,'+'
+ 080E CD0500            call    bdos
+ 0811 2ADE1A            lhld    HLREG2  ;Restore HL to beginning of the row
+ 0814 22DC1A            shld    HLREG1  ;Save as the working HL reg
+ 0817 060A              mvi     b,0ah   ;initialize counter to 10
+ 0819 00        cloop2: nop     ;This is the 2nd inner most column loop
+ 081A C5                push    b;
+ 081B 2ADC1A            lhld    HLREG1  ;Can't tell who messed with it
+ 081E 7E                mov     a,m     ;get value of maze
+ 081F 23                inx     h       ;increment address
+ 0820 22DC1A            shld    HLREG1  ;Save it before it gets corrupted
+ 0823 32E01A            sta     prval   ;store it
+ 0826 E604              ani     04h     ;AND with South Mask
+ 0828 C23608            jnz      nsdoor  ;no south door - print wall
+                ;       print characters indicating room has a south door
+ 082B 0E09              mvi     c,wrtline
+ 082D 11B40E            lxi     d,sdoori
+ 0830 CD0500            call    bdos
+ 0833 C33E08            jmp     dec2b   ;jump to decrement 2nd B counter
+                ;       print characters indicating room has a south wall
+ 0836 0E09      nsdoor: mvi     c,wrtline
+ 0838 11B90E            lxi     d,sdoorv
+ 083B CD0500            call    bdos
+                ;       Decrement 2nd inner loop counter and loop back if not 0.
+ 083E C1        dec2b:  pop     b
+ 083F 05                dcr     b       ;decrement the counter
+ 0840 C21908            jnz     cloop2    ;print the next line if not zero
+                ;       Print a cr/lf
+ 0843 0E09              mvi     c, wrtline
+ 0845 119D0E            lxi     d, mcrlf
+ 0848 CD0500            call    bdos    ;write a carriage return/line feed
+                ;       Decrement outer loop counter and loop back if not 0
+ 084B C1                pop     b
+ 084C 05                dcr     b       ;decrement the counter
+ 084D C25707            jnz     rloop    ;print the next line if not zero
+                ;       restore registers
+ 0850 E1                pop     h
+ 0851 D1                pop     d
+ 0852 C1                pop     b
+ 0853 C9                ret
+                ;
+                ;       Update Maze Sub
+ 0854 C5        upmazs: push    b       ;save registers
+ 0855 D5                push    d
+ 0856 E5                push    h
+ 0857 21840A            lxi     h,maze  ;LOAD ADDRESS OF MAZE TO HL REGISTER
+ 085A 22DC1A            shld    HLREG1  ;Will later be the destination address
+ 085D 22DE1A            shld    HLREG2  ;Will later be the source address
+ 0860 3AE21A            lda     usmaz   ;Get User Selected Maze Number
+ 0863 47                mov     b,a     ;Move it to B
+ 0864 E6FF              ani     255     ;Set z flag if usmaz =0
+ 0866 CA7908            jz      movmaz  ;if =0, Go to move maze - no offset needed
+ 0869 C5        caloop: push    b
+ 086A 2ADE1A            lhld    HLREG2
+ 086D 016400            lxi     b,100   ;load increment acmount to regs b & C
+ 0870 09                DAD     B       ;add increment amount TO HL
+ 0871 22DE1A            shld    HLREG2  ;Store the result
+ 0874 C1                pop     b       ;Get loop counter
+ 0875 05                dcr     b       ;decrement the counter
+ 0876 C26908            jnz     caloop  ;Add another 100 if not zero
+ 0879 00        movmaz: nop     ;Move the Maze (even if no move is needed)
+                ;       Copy the maze from HLREG2 to HLREG1
+ 087A 0664              mvi     b,100   ;initialize counter to 100
+ 087C C5        mabyt:  push    b       ;Save B register
+ 087D 2ADE1A            lhld    HLREG2  ;load source address
+ 0880 7E                mov     a,m     ;Move byte from address in HL to accumulator
+ 0881 2ADC1A            lhld    HLREG1  ;load destination address
+ 0884 77                mov     m,a     ;Save accum to address in HL
+ 0885 2ADC1A            lhld    HLREG1  ;load destination address
+ 0888 77                mov     m,a     ;Save accum to address in HL
+ 0889 E610              ani     10h     ;AND with Start Mask
+ 088B CA9408            jz      inxhl;  Not the start - continue
+ 088E 3E64              mvi     a,100   ;load accuml with 100
+ 0890 90                sub     b       ;Subtract B from 100
+ 0891 32E31A            sta     mazesrt ;Save Starting Room Offset
+ 0894 23        inxhl:  inx     h       ;increment HL
+ 0895 22DC1A            shld    HLREG1  ;Save new destination address
+ 0898 2ADE1A            lhld    HLREG2  ;load new source address
+ 089B 23                inx     h       ;increment HL
+ 089C 22DE1A            shld    HLREG2  ;Save new Source address
+ 089F C1                pop     b
+ 08A0 05                dcr     b       ;decrement
+ 08A1 C27C08            jnz     mabyt   ;move another byte is not zero
+                ;       restore registers
+ 08A4 E1                pop     h
+ 08A5 D1                pop     d
+ 08A6 C1                pop     b
+ 08A7 C9                ret
+                ;
+                ;       Press Enter to continue Sub
+ 08A8 CD0500    prentr: CALL BDOS
+ 08AB 11F70E            LXI     D,mpentr        ;DE=ADDRESS OF Message to press enter
+ 08AE 0E09              MVI     C,WRTLINE       ;C=BDOS WRITE COMMAND
+ 08B0 CD0500            CALL BDOS
+                ;       GET  RESPONSE
+ 08B3 11150A            LXI     D,INBUF ;DE=POINTER TO INPUT BUFFER
+ 08B6 3E64              MVI     A,IBUFLEN       ;SET MAXSIZE TO READ
+ 08B8 0E0A              MVI     C,RDLINE        ;C=BDOS READ LINE COMMAND
+ 08BA CD0500            CALL    BDOS
+ 08BD C9                RET
+                ;
+                ;*******END OF PART 3********
+                ;*******START OF PART 4********;
+                ;
+                ;       DATA AREA
+ 08BE 0D0A544845MSEXIT: DB      CR,LF,'THERE IS AN EXIT TO THE $'
+ 08D9 0D0A544845MMEXIT: DB      CR,LF,'THERE ARE EXITS TO THE $'
+ 08F3 0D0A492044MBADR:  DB      CR,LF,'I DO NOT UNDERSTAND THAT DIRECTION $'
+ 0919 0D0A544845MBADD:  DB      CR,LF,'THERE ARE NO EXITS IN THAT DIRECTION $'
+ 0941 2020202020MPRRM:  DB      '     PREVIOUSLY VISITED ROOM $'
+ 095F 2020202020MNEWRM: DB      '     NEW ROOM $'
+ 096E 0D0A0A5455MTRNUM: DB      CR,LF,LF,'TURN NUMBER: $'
+ 097F 2020202020MNRCNT: DB      '     NEW ROOMS VISITED: $'
+ 0998 05        CURROOM: DB      05H
+ 0999 23        CUROFF: DB      23H     ;CURRENT ROOM OFFSET
+ 099A 4E4F525448NMESS:  DB      'NORTH $'
+ 09A1 534F555448SMESS:  DB      'SOUTH $'
+ 09A8 4541535420EMESS:  DB      'EAST $'
+ 09AE 5745535420WMESS:  DB      'WEST $'
+ 09B4 534F555448SDMESS: DB      'SOUTH DOOR $'
+ 09C0 4E4F525448NDMESS: DB      'NORTH DOOR $'
+ 09CC 4541535420EDMESS: DB      'EAST DOOR  $'
+ 09D8 5745535420WDMESS: DB      'WEST DOOR  $'
+ 09E4 0D0A504C45MPROMPT: DB      CR,LF,'PLEASE SELECT A DIRECTION (1ST LETTER IS OK): $'
+ 0A15           INBUF:  DS      IBUFLEN+2
+ 0A7B 00        LREG:   DB      00H
+ 0A7C 00        HREG:   DB      00H
+ 0A7D 00        TCNT1:  DB      00H     ;LEAST SIGNIFICANT DIGITS OF THE TURN COUNT
+ 0A7E 00        TCNT2:  DB      00H     ;MOST SIGNIFICANT DIGIT OF THE TURN COUNT
+ 0A7F 00        BCDDIG: DB      00H     ;BYTE CONTAINING 2 BCD DIGITS
+ 0A80 00        NRCNT:  DB      00H     ;BYTE INDICATING NEW ROOM COUNT
+ 0A81 00        NORINT: DB      00H     ;BYTE INDICATING NEW ORIENTATION
+ 0A82 00        OORINT: DB      00H     ;BYTE INDICATING OLD ORIENTATION
+ 0A83 53        DIRFAC: DB      53H     ;BYTE INDICATING DIRECTION FACING
+                ;
+                maze:
+ 0A84 3406052205  DB  34H,06H,05H,22H,05H,06H,05H,06H,07H,05H
+ 0A8E 0A0D0A030D  DB  0AH,0DH,0AH,03H,0DH,28H,0AH,09H,28H,0CH
+ 0A98 060922050E  DB  06H,09H,22H,05H,0EH,03H,07H,03H,05H,0CH
+ 0AA2 0C06030928  DB  0CH,06H,03H,09H,28H,24H,28H,06H,09H,0CH
+ 0AAC 0C0C060705  DB  0CH,0CH,06H,07H,05H,0EH,05H,0CH,06H,09H
+ 0AB6 0A0B09280A  DB  0AH,0BH,09H,28H,0AH,09H,0CH,0AH,0BH,21H
+ 0AC0 2406050607  DB  24H,06H,05H,06H,07H,07H,0BH,03H,03H,05H
+ 0ACA 0A090C0C28  DB  0AH,09H,0CH,0CH,28H,0CH,24H,22H,05H,0CH
+ 0AD4 06050A0F21  DB  06H,05H,0AH,0FH,21H,0EH,0BH,05H,0CH,0CH
+ 0ADE A80A030922  DB  0A8H,0AH,03H,09H,22H,0BH,21H,28H,0AH,09H
+                ;maze1
+ 0AE8 2422030303  DB  24H,22H,03H,03H,03H,05H,06H,07H,21H,34H
+ 0AF2 0E03030307  DB  0EH,03H,03H,03H,07H,09H,0CH,0AH,03H,0DH
+ 0AFC 280605220F  DB  28H,06H,05H,22H,0FH,21H,0CH,24H,24H,0CH
+ 0B06 060D0A030F  DB  06H,0DH,0AH,03H,0FH,05H,0EH,09H,0CH,0CH
+ 0B10 0C0C06210C  DB  0CH,0CH,06H,21H,0CH,0AH,09H,06H,09H,0CH
+ 0B1A 0C280A030F  DB  0CH,28H,0AH,03H,0FH,21H,24H,0AH,07H,09H
+ 0B24 0C22050609  DB  0CH,22H,05H,06H,09H,24H,0CH,22H,0DH,24H
+ 0B2E 0E210C0A03  DB  0EH,21H,0CH,0AH,03H,0BH,0DH,24H,0AH,0DH
+ 0B38 0E210E0307  DB  0EH,21H,0EH,03H,07H,03H,0DH,0EH,21H,0CH
+ 0B42 28A209220B  DB  28H,0A2H,09H,22H,0BH,21H,28H,0AH,03H,09H
+                ;MAZE2
+ 0B4C 0621060705  DB  06H,21H,06H,07H,05H,32H,05H,06H,05H,24H
+ 0B56 0A03090C0E  DB  0AH,03H,09H,0CH,0EH,05H,0AH,0DH,0CH,0CH
+ 0B60 0607050C28  DB  06H,07H,05H,0CH,28H,0CH,24H,0CH,0CH,0CH
+ 0B6A 0C0C0A0B21  DB  0CH,0CH,0AH,0BH,21H,0AH,0BH,09H,0AH,09H
+ 0B74 0C0C220522  DB  0CH,0CH,22H,05H,22H,07H,03H,05H,22H,05H
+ 0B7E 0C0A030924  DB  0CH,0AH,03H,09H,24H,0AH,05H,0AH,03H,0DH
+ 0B88 0A0524220F  DB  0AH,05H,24H,22H,0FH,03H,09H,06H,05H,0CH
+ 0B92 06090C220D  DB  06H,09H,0CH,22H,0DH,22H,05H,0CH,0AH,0DH
+ 0B9C 0E050E030F  DB  0EH,05H,0EH,03H,0FH,21H,0CH,0CH,22H,09H
+ 0BA6 280A0B2128  DB  28H,0AH,0BH,21H,28H,0A2H,0BH,0BH,03H,21H
+                ;MAZE3
+ 0BB0 0603030506  DB  06H,03H,03H,05H,06H,03H,03H,05H,32H,05H
+ 0BBA 0C22050A09  DB  0CH,22H,05H,0AH,09H,06H,21H,0CH,06H,09H
+ 0BC4 0A050A0307  DB  0AH,05H,0AH,03H,07H,09H,06H,0DH,0AH,05H
+ 0BCE 060906050A  DB  06H,09H,06H,05H,0AH,05H,0CH,0CH,06H,09H
+ 0BD8 0A05280A05  DB  0AH,05H,28H,0AH,05H,0CH,0CH,28H,0AH,05H
+ 0BE2 060B05220F  DB  06H,0BH,05H,22H,0FH,09H,0AH,03H,05H,0CH
+ 0BEC 0C0609060D  DB  0CH,06H,09H,06H,0DH,06H,03H,05H,0AH,09H
+ 0BF6 0C0C060D0A  DB  0CH,0CH,06H,0DH,0AH,09H,24H,0AH,07H,05H
+ 0C00 0C0C0C0A03  DB  0CH,0CH,0CH,0AH,03H,05H,0EH,07H,09H,28H
+ 0C0A 280A092203  DB  28H,0AH,09H,22H,03H,09H,0A8H,0AH,03H,21H
+                ;MAZE4
+ 0C14 0605160303  DB  06H,05H,16H,03H,03H,07H,21H,06H,03H,05H
+ 0C1E 0C0A092203  DB  0CH,0AH,09H,22H,03H,0BH,07H,0DH,06H,09H
+ 0C28 0A05220703  DB  0AH,05H,22H,07H,03H,05H,28H,28H,0AH,21H
+ 0C32 060F210A21  DB  06H,0FH,21H,0AH,21H,0AH,07H,05H,22H,05H
+ 0C3C 0C0A030303  DB  0CH,0AH,03H,03H,03H,03H,09H,0CH,06H,0DH
+ 0C46 0C06030303  DB  0CH,06H,03H,03H,03H,03H,05H,0AH,0DH,0CH
+ 0C50 280C060303  DB  28H,0CH,06H,03H,03H,05H,0EH,05H,28H,0CH
+ 0C5A 06090A2106  DB  06H,09H,0AH,21H,06H,09H,0CH,0EH,03H,09H
+ 0C64 0E03030309  DB  0EH,03H,03H,03H,09H,06H,0DH,28H,24H,24H
+ 0C6E 0A030321A2  DB  0AH,03H,03H,21H,0A2H,09H,0AH,03H,0BH,09H
+                ;maze5
+ 0C78 2424060721  DB  24H,24H,06H,07H,21H,34H,22H,07H,03H,21H
+ 0C82 0C0C0C0C06  DB  0CH,0CH,0CH,0CH,06H,09H,06H,0BH,03H,05H
+ 0C8C 0E0D0C0E09  DB  0EH,0DH,0CH,0EH,09H,06H,0BH,03H,05H,0CH
+ 0C96 0C0A092806  DB  0CH,0AH,09H,28H,06H,09H,06H,05H,28H,0CH
+ 0CA0 0E0506050A  DB  0EH,05H,06H,05H,0AH,03H,09H,0CH,06H,09H
+ 0CAA 0C0A090A03  DB  0CH,0AH,09H,0AH,03H,03H,05H,0CH,0AH,21H
+ 0CB4 2806072106  DB  28H,06H,07H,21H,06H,03H,0DH,0AH,03H,05H
+ 0CBE 06090A050C  DB  06H,09H,0AH,05H,0CH,22H,0BH,03H,05H,0CH
+ 0CC8 0C06030B0B  DB  0CH,06H,03H,0BH,0BH,05H,06H,03H,0BH,09H
+ 0CD2 280A21A203  DB  28H,0AH,21H,0A2H,03H,09H,0AH,03H,03H,21H
+                ;MAZE6
+ 0CDC 2203052205  DB  22H,03H,05H,22H,05H,06H,05H,22H,15H,24H
+ 0CE6 06050C060D  DB  06H,05H,0CH,06H,0DH,28H,0AH,05H,0CH,0CH
+ 0CF0 0C0C0C0C0A  DB  0CH,0CH,0CH,0CH,0AH,03H,03H,0DH,0EH,09H
+ 0CFA 0C0A090A05  DB  0CH,0AH,09H,0AH,05H,06H,05H,28H,0AH,05H
+ 0D04 0E0506050A  DB  0EH,05H,06H,05H,0AH,0DH,28H,06H,05H,0CH
+ 0D0E 0C0A090A03  DB  0CH,0AH,09H,0AH,03H,0BH,03H,09H,0CH,0CH
+ 0D18 0A21060303  DB  0AH,21H,06H,03H,03H,03H,07H,21H,0AH,0DH
+ 0D22 06050A0506  DB  06H,05H,0AH,05H,06H,05H,0CH,06H,03H,09H
+ 0D2C 0C0C060D0C  DB  0CH,0CH,06H,0DH,0CH,28H,0EH,0DH,06H,05H
+ 0D36 280A09A80A  DB  28H,0AH,09H,0A8H,0AH,03H,09H,0AH,09H,28H
+                ;MAZE7
+ 0D40 2434240605  DB  24H,34H,24H,06H,05H,24H,22H,07H,07H,05H
+ 0D4A 0A0B0B0D0A  DB  0AH,0BH,0BH,0DH,0AH,0BH,05H,28H,28H,0CH
+ 0D54 2406050E03  DB  24H,06H,05H,0EH,03H,21H,0EH,05H,24H,0CH
+ 0D5E 0E0D0A0922  DB  0EH,0DH,0AH,09H,22H,03H,09H,0CH,0CH,0CH
+ 0D68 280C220307  DB  28H,0CH,22H,03H,07H,03H,05H,0CH,0EH,09H
+ 0D72 220B07050A  DB  22H,0BH,07H,05H,0AH,21H,0CH,0EH,0BH,21H
+ 0D7C 06050C2806  DB  06H,05H,0CH,28H,06H,03H,0DH,0AH,03H,05H
+ 0D86 0C0C0E0528  DB  0CH,0CH,0EH,05H,28H,06H,0DH,06H,03H,0DH
+ 0D90 0C0A090A05  DB  0CH,0AH,09H,0AH,05H,0CH,28H,0CH,24H,0CH
+ 0D9A 0AA1220309  DB  0AH,0A1H,22H,03H,09H,0AH,03H,09H,0AH,09H
+                ;MAZE8
+ 0DA4 2434240605  DB  24H,34H,24H,06H,05H,24H,22H,07H,07H,05H
+ 0DAE 0A0B0B0D0A  DB  0AH,0BH,0BH,0DH,0AH,0BH,05H,28H,28H,0CH
+ 0DB8 2406050E03  DB  24H,06H,05H,0EH,03H,21H,0EH,05H,24H,0CH
+ 0DC2 0E0D0A0922  DB  0EH,0DH,0AH,09H,22H,03H,09H,0CH,0CH,0CH
+ 0DCC 280C220307  DB  28H,0CH,22H,03H,07H,03H,05H,0CH,0EH,09H
+ 0DD6 220B07050A  DB  22H,0BH,07H,05H,0AH,21H,0CH,0EH,0BH,21H
+ 0DE0 06050C2806  DB  06H,05H,0CH,28H,06H,03H,0DH,0AH,03H,05H
+ 0DEA 0C0C0E0528  DB  0CH,0CH,0EH,05H,28H,06H,0DH,06H,03H,0DH
+ 0DF4 0C0A090A05  DB  0CH,0AH,09H,0AH,05H,0CH,28H,0CH,24H,0CH
+ 0DFE 0AA1220309  DB  0AH,0A1H,22H,03H,09H,0AH,03H,09H,0AH,09H
+                ;MAZE9
+ 0E08 0607032106  DB  06H,07H,03H,21H,06H,31H,06H,05H,06H,05H
+ 0E12 0C2806050C  DB  0CH,28H,06H,05H,0CH,06H,0DH,0CH,28H,0CH
+ 0E1C 0C06090C0A  DB  0CH,06H,09H,0CH,0AH,09H,28H,0CH,06H,09H
+ 0E26 0A09060906  DB  0AH,09H,06H,09H,06H,03H,05H,0CH,0EH,05H
+ 0E30 060309060D  DB  06H,03H,09H,06H,0DH,06H,09H,0CH,28H,0CH
+ 0E3A 0A05060928  DB  0AH,05H,06H,09H,28H,0AH,03H,0DH,06H,0DH
+ 0E44 06090C2406  DB  06H,09H,0CH,24H,06H,03H,05H,0CH,0CH,28H
+ 0E4E 0A03090A09  DB  0AH,03H,09H,0AH,09H,06H,0FH,09H,0AH,05H
+ 0E58 2207030703  DB  22H,07H,03H,07H,03H,09H,0AH,03H,05H,0CH
+ 0E62 A20B210A03  DB  0A2H,0BH,21H,0AH,03H,03H,03H,21H,0AH,09H
+                ;
+ 0E6C 0D0A202020mnedge: db      cr,lf,'   +---+---+---+---+---+---+---+---+---+---+',cr,lf,'$'
+ 0E9D 0D0A24    mcrlf:  db      cr,lf,'$'
+ 0EA0 20202024  spc3:   db      '   $'
+ 0EA4 20462024  msfs:   db      ' F $'
+ 0EA8 20532024  msss:   db      ' S $'
+ 0EAC 20582024  msxs:   db      ' X $'
+ 0EB0 202E2024  msps    db      ' . $'
+ 0EB4 2D2D2D2B24sdoori: db      '---+$'
+ 0EB9 2020202B24sdoorv: db      '   +$'
+ 0EBE 0D0A504C45mmazpr: db      CR,LF,'PLEASE SELECT A MAZE (0 TO 9):$'
+ 0EDF 0D0A424144MMAZER: DB      CR,LF,'BAD ENTRY - TRY AGAIN$';
+ 0EF7 0D0A505245mpentr: DB      CR,LF,'PRESS ENTER TO CONTINUE:$'
+ 0F12 0D0A544845mghist: DB      CR,LF,'THE DOTS INDICATE WHERE YOU HAVE BEEN.$'
+                ;
+ 0F3B 0D0A2B2D2BMRMVIEW: DB      CR,LF,'+-+-----------------------------------------+-+'
+ 0F6C 0D0A7C2020LINE2:  DB      CR,LF,'|   +                                     +   |'
+ 0F9D 0D0A7C2020LINE3:  DB      CR,LF,'|     +                                 +     |'
+ 0FCE 0D0A7C2020        DB      CR,LF,'|       +                             +       |'
+ 0FFF 0D0A7C2020        DB      CR,LF,'|         +                         +         |'
+ 1030 0D0A7C2020        DB      CR,LF,'|  +        +                     +        +  |'
+ 1061 0D0A7C2020        DB      CR,LF,'|  |  +       +-----------------+       +  |  |'
+ 1092 0D0A7C2020        DB      CR,LF,'|  |     +    |                 |    +     |  |'
+ 10C3 0D0A7C2020        DB      CR,LF,'|  |        + |   +---------+   | +        |  |'
+ 10F4 0D0A7C2020        DB      CR,LF,'|  | NORTH  | |   |         |   | | SOUTH  |  |'
+ 1125 0D0A7C2020        DB      CR,LF,'|  | DOOR   | |   |  EAST   |   | | DOOR   |  |'
+ 1156 0D0A7C2020        DB      CR,LF,'|  |        | |   |  DOOR   |   | |        |  |'
+ 1187 0D0A7C2020        DB      CR,LF,'|  |        | |   |         |   | |        |  |'
+ 11B8 0D0A7C2020        DB      CR,LF,'|  |        | |   |         |   | |        |  |'
+ 11E9 0D0A7C2020        DB      CR,LF,'|  |        | +---+---------+---+ |        |  |'
+ 121A 0D0A7C2020        DB      CR,LF,'|  |        +                     +        |  |'
+ 124B 0D0A7C2020        DB      CR,LF,'|  |      +                         +      |  |'
+ 127C 0D0A7C2020        DB      CR,LF,'|  |    +                             +    |  |'
+ 12AD 0D0A7C2020        DB      CR,LF,'|  |  +                                 +  |  |'
+ 12DE 0D0A2B2D2B        DB      CR,LF,'+-+-----------------------------------------+-+$'
+                ;
+ 1310 0D0A202020MMAZEX: DB      CR,LF,'   +---+---+---+---+---+---+---+---+---+---+'
+ 133E 0D0A202020        DB      CR,LF,'   |       |       | S             |       |'
+ 136C 0D0A202020        DB      CR,LF,'   +   +   +   +---+---+---+   +   +   +   +'
+ 139A 0D0A202020        DB      CR,LF,'   |   |                       |       |   |'
+ 13C8 0D0A202020        DB      CR,LF,'   +   +---+   +   +---+---+   +---+---+   +'
+ 13F6 0D0A202020        DB      CR,LF,'   |       |   |       |           |       |'
+ 1424 0D0A202020        DB      CR,LF,'   +   +   +-------+---+---+---+---+   +---+'
+ 1452 0D0A202020        DB      CR,LF,'   |   |   |   * CONGRATULATIONS * |       |'
+ 1480 0D0A202020        DB      CR,LF,'   +   +   +     ----------------  +---+   +'
+ 14AE 0D0A202020        DB      CR,LF,'   |   |   |        YOU HAVE       |       |'
+ 14DC 0D0A202020        DB      CR,LF,'   +   +---+      SUCCESSFULLY     +   +---+'
+ 150A 0D0A202020        DB      CR,LF,'   |       |     FOUND THE MAZE    |       |'
+ 1538 0D0A202020        DB      CR,LF,'   +---+   +          EXIT.        +---+   +'
+ 1566 0D0A202020        DB      CR,LF,'   |   |   |       NICE JOB!!!     |   |   |'
+ 1594 0D0A202020        DB      CR,LF,'   +   +   +---+---+---+---+---+---+   +   +'
+ 15C2 0D0A202020        DB      CR,LF,'   |   |               |       |           |'
+ 15F0 0D0A202020        DB      CR,LF,'   +   +---+   +---+   +   +   +---+---+   +'
+ 161E 0D0A202020        DB      CR,LF,'   |           |       |   |               |'
+ 164C 0D0A202020        DB      CR,LF,'   +   +---+---+   +---+---+---+   +   +---+'
+ 167A 0D0A202020        DB      CR,LF,'   |       |             F |       |       |'
+ 16A8 0D0A202020        DB      CR,LF,'   +---+---+---+---+---+---+---+---+---+---+$'
+                ;
+ 16D7 0D0A4C454AMSPLASH: DB      CR,LF,'LEJ-PROJECTS                        MARCH 2022'
+ 1707 0D0A2B2D2B        DB      CR,LF,'+-+-----------------------------------------+-+'
+ 1738 0D0A7C2020        DB      CR,LF,'|   +                                     +   |'
+ 1769 0D0A7C2020        DB      CR,LF,'|     +                                 +     |'
+ 179A 0D0A7C2020        DB      CR,LF,'|       +-----------------------------+       |'
+ 17CB 0D0A7C2020        DB      CR,LF,'|       | +                         + |       |'
+ 17FC 0D0A7C2020        DB      CR,LF,'|       |   +                     +   |       |'
+ 182D 0D0A7C2020        DB      CR,LF,'|       |     +-----------------+     |       |'
+ 185E 0D0A7C2020        DB      CR,LF,'|       |     |     MAZE029     |     |       |'
+ 188F 0D0A7C2020        DB      CR,LF,'|       |     |                 |     |       |'
+ 18C0 0D0A7C2020        DB      CR,LF,'|       |     |   A MAZE GAME   |     |       |'
+ 18F1 0D0A7C2020        DB      CR,LF,'|       |     |     FROM A      |     |       |'
+ 1922 0D0A7C2020        DB      CR,LF,'|       |     |  RATS EYE VIEW  |     |       |'
+ 1953 0D0A7C2020        DB      CR,LF,'|       |     |       BY        |     |       |'
+ 1984 0D0A7C2020        DB      CR,LF,'|       |     |  LLOYD JOHNSON  |     |       |'
+ 19B5 0D0A7C2020        DB      CR,LF,'|       |     +-----------------+     |       |'
+ 19E6 0D0A7C2020        DB      CR,LF,'|       |   +                     +   |       |'
+ 1A17 0D0A7C2020        DB      CR,LF,'|       | +                         + |       |'
+ 1A48 0D0A7C2020        DB      CR,LF,'|       +-----------------------------+       |'
+ 1A79 0D0A7C2020        DB      CR,LF,'|     +                                 +     |'
+ 1AAA 0D0A2B2D2B        DB      CR,LF,'+-+-----------------------------------------+-+$'
+                ;
+ 1ADC           HLREG1: DS      2
+ 1ADE           HLREG2: DS      2
+ 1AE0 00        prval:  db      0       ;Room Value to be printed
+ 1AE1 00        proff:  db      0       ;offset of room printed
+ 1AE2 05        usmaz:  db      5       ;User Selected Maze (0-9)
+ 1AE3 04        mazesrt db      4       ;offset of maze start
+ 1AE4 5F        exitoff db      95      ;offset of maze exit
+                ;
+                ;       SETUP STACK SPACE
+ 1AE5                   DS      64      ; 40H LOCATIONS
+ 1B25 00        STAK:   DB      0       ; TOP OF STACK (STACK BUILDS DOWNWARDS IN MEMORY)
+
+ 1B26                   END
+
